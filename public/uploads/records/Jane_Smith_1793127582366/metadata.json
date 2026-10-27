@@ -1,0 +1,59 @@
+{
+  "record_id": 7,
+  "folder_name": "Jane_Smith_1793127582366",
+  "submitted_at": "2026-10-27T18:59:42.399Z",
+  "verification_status": "Verified",
+  "status": "Pending",
+  "candidate": {
+    "full_name": "Jane Smith",
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "email": "janesmith@gmail.com",
+    "phone": "07376135115",
+    "dob": "1990-11-27",
+    "address": "10 Downing Street",
+    "city": "London",
+    "postcode": "EC15YG"
+  },
+  "files": {
+    "face_verification": [
+      "/uploads/candidates/Jane_Smith_1793127582366/biometrics/biometric_video.mp4",
+      "/uploads/candidates/Jane_Smith_1793127582366/biometrics/facial_snapshot.jpg"
+    ],
+    "documents": [
+      "/uploads/candidates/Jane_Smith_1793127582366/documents/id_document.jpg",
+      "/uploads/candidates/Jane_Smith_1793127582366/documents/proof_of_address.jpg",
+      "/uploads/candidates/Jane_Smith_1793127582366/documents/rtw_document.jpg",
+      "/uploads/candidates/Jane_Smith_1793127582366/documents/cv_resume.pdf"
+    ]
+  },
+  "form_fields": {
+    "firstName": "Jane",
+    "lastName": "Smith",
+    "fullName": "Jane Smith",
+    "dob": "1990-11-27",
+    "address": "10 Downing Street",
+    "city": "London",
+    "postcode": "EC15YG",
+    "email": "janesmith@gmail.com",
+    "phone": "07376135115",
+    "rtw": "W1X-2YZ-3AB",
+    "nino": "AB 12 34 56 C",
+    "rtwFileName": "IMG_5500.jpeg",
+    "employer": "Acme ltd",
+    "jobTitle": "Soft engineer",
+    "salary": "27000",
+    "duration": "1 year",
+    "cvFileName": "IonAlexandru_Pica_CV.pdf",
+    "docType": "passport",
+    "docFileName": "IMG_5500.jpeg",
+    "livedFiveYears": "No",
+    "currentAddressHistory": "10 Downing Street, London, EC15YG (Moved in: 2023-08-27)",
+    "previousAddressHistory": "24 High Street, London, EG15HG (2020-10-27 to 2023-07-27)",
+    "poaDocType": "utility_bill",
+    "poaFileName": "IMG_5500.jpeg",
+    "dbsConsent": "Consented",
+    "declarationSignature": "Jane smith",
+    "submittedAt": "2026-10-27T18:59:32.443Z"
+  }
+}

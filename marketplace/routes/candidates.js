@@ -19,6 +19,26 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
   const CANDIDATES_DIR = path.join(UPLOAD_DIR, 'candidates');
   fs.mkdirSync(CANDIDATES_DIR, { recursive: true });
 
+  // Explicitly serve uploaded candidate/record media with proper MIME types for .webm and .mp4
+  router.use('/uploads', express.static(UPLOAD_DIR, {
+    setHeaders: (res, filePath) => {
+      const ext = path.extname(filePath || '').toLowerCase();
+      if (ext === '.webm') {
+        res.setHeader('Content-Type', 'video/webm');
+        res.setHeader('Accept-Ranges', 'bytes');
+      } else if (ext === '.mp4') {
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Accept-Ranges', 'bytes');
+      } else if (ext === '.ogv' || ext === '.ogg') {
+        res.setHeader('Content-Type', 'video/ogg');
+        res.setHeader('Accept-Ranges', 'bytes');
+      } else if (ext === '.mov') {
+        res.setHeader('Content-Type', 'video/quicktime');
+        res.setHeader('Accept-Ranges', 'bytes');
+      }
+    }
+  }));
+
   // Multer upload fallback for multipart/form-data
   const tempUploadDir = path.join(CANDIDATES_DIR, '_temp');
   fs.mkdirSync(tempUploadDir, { recursive: true });
@@ -32,9 +52,11 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
   }).fields([
     { name: 'docFile', maxCount: 1 },
     { name: 'idDocument', maxCount: 1 },
+    { name: 'biometric_video', maxCount: 1 },
     { name: 'videoVerification', maxCount: 1 },
     { name: 'biometricVideo', maxCount: 1 },
     { name: 'facialCapture', maxCount: 1 },
+    { name: 'facial_capture', maxCount: 1 },
     { name: 'poaFile', maxCount: 1 },
     { name: 'rtwFile', maxCount: 1 },
     { name: 'cvFile', maxCount: 1 }
@@ -66,7 +88,8 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
   }
 
   /**
-   * Helper to decode Base64 data and save to file locally
+   * Helper to decode Base64 data and save to file locally.
+   * Supports Data URLs with codec parameters (e.g. data:video/webm;codecs=vp8,opus;base64,...).
    */
   function saveBase64File(base64Data, targetDir, defaultBaseName, fallbackExt = '.bin') {
     if (!base64Data || typeof base64Data !== 'string') return null;
@@ -74,22 +97,36 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
     if (!b64) return null;
 
     let ext = fallbackExt;
-    const match = b64.match(/^data:([a-zA-Z0-9\/\-+.]+);base64,(.+)$/);
-    if (match) {
-      const mime = match[1].toLowerCase();
-      b64 = match[2];
+    const base64Marker = ';base64,';
+    const markerIdx = b64.indexOf(base64Marker);
+    if (b64.startsWith('data:') && markerIdx !== -1) {
+      const mime = b64.slice(5, markerIdx).toLowerCase();
+      b64 = b64.slice(markerIdx + base64Marker.length).trim();
       if (mime.includes('pdf')) ext = '.pdf';
       else if (mime.includes('png')) ext = '.png';
       else if (mime.includes('jpeg') || mime.includes('jpg')) ext = '.jpg';
       else if (mime.includes('webp')) ext = '.webp';
       else if (mime.includes('webm')) ext = '.webm';
       else if (mime.includes('mp4')) ext = '.mp4';
+      else if (mime.includes('ogg') || mime.includes('ogv')) ext = '.ogv';
       else if (mime.includes('quicktime') || mime.includes('mov')) ext = '.mov';
       else if (mime.includes('msword') || mime.includes('wordprocessingml')) ext = '.docx';
+    } else if (b64.startsWith('data:')) {
+      const commaIdx = b64.indexOf(',');
+      if (commaIdx !== -1) {
+        const header = b64.slice(5, commaIdx).toLowerCase();
+        b64 = b64.slice(commaIdx + 1).trim();
+        if (header.includes('webm')) ext = '.webm';
+        else if (header.includes('mp4')) ext = '.mp4';
+        else if (header.includes('jpeg') || header.includes('jpg')) ext = '.jpg';
+        else if (header.includes('png')) ext = '.png';
+        else if (header.includes('pdf')) ext = '.pdf';
+      }
     }
 
     try {
-      const buffer = Buffer.from(b64, 'base64');
+      const cleanB64 = b64.replace(/\s+/g, '');
+      const buffer = Buffer.from(cleanB64, 'base64');
       let filename = defaultBaseName;
       if (!path.extname(filename)) {
         filename += ext;
@@ -127,9 +164,11 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
       const candidateBaseDir = path.join(CANDIDATES_DIR, folderName);
       const docsDir = path.join(candidateBaseDir, 'documents');
       const bioDir = path.join(candidateBaseDir, 'biometrics');
+      const faceVerifDir = path.join(candidateBaseDir, 'face_verification');
 
       fs.mkdirSync(docsDir, { recursive: true });
       fs.mkdirSync(bioDir, { recursive: true });
+      fs.mkdirSync(faceVerifDir, { recursive: true });
 
       let idDocumentPath = '';
       let biometricVideoPath = '';
@@ -155,33 +194,53 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
         idDocumentPath = `/uploads/candidates/${folderName}/documents/${path.basename(dest)}`;
       }
 
-      // 2. Save Biometric Video into /biometrics/
-      const rawVideoB64 = body.biometricVideo || body.videoVerification;
+      // 2. Save Biometric Video into /biometrics/ and /face_verification/
+      const rawVideoB64 = body.biometric_video || body.biometricVideo || body.videoVerification;
+      const uploadedVideoFile =
+        (files.biometric_video && files.biometric_video[0]) ||
+        (files.biometricVideo && files.biometricVideo[0]) ||
+        (files.videoVerification && files.videoVerification[0]);
       if (rawVideoB64 && typeof rawVideoB64 === 'string') {
         const saved = saveBase64File(rawVideoB64, bioDir, 'biometric_video', '.webm');
-        if (saved) biometricVideoPath = `/uploads/candidates/${folderName}/biometrics/${saved}`;
-      } else if (files.biometricVideo && files.biometricVideo[0]) {
-        const f = files.biometricVideo[0];
-        const dest = path.join(bioDir, 'biometric_video' + path.extname(f.originalname || '.webm'));
-        fs.renameSync(f.path, dest);
-        biometricVideoPath = `/uploads/candidates/${folderName}/biometrics/${path.basename(dest)}`;
-      } else if (files.videoVerification && files.videoVerification[0]) {
-        const f = files.videoVerification[0];
-        const dest = path.join(bioDir, 'biometric_video' + path.extname(f.originalname || '.webm'));
-        fs.renameSync(f.path, dest);
-        biometricVideoPath = `/uploads/candidates/${folderName}/biometrics/${path.basename(dest)}`;
+        if (saved) {
+          biometricVideoPath = `/uploads/candidates/${folderName}/biometrics/${saved}`;
+          try {
+            fs.copyFileSync(path.join(bioDir, saved), path.join(faceVerifDir, saved));
+          } catch (_) {}
+        }
+      } else if (uploadedVideoFile) {
+        const ext = path.extname(uploadedVideoFile.originalname || '.webm') || '.webm';
+        const savedName = 'biometric_video' + ext;
+        const destBio = path.join(bioDir, savedName);
+        const destFace = path.join(faceVerifDir, savedName);
+        fs.copyFileSync(uploadedVideoFile.path, destBio);
+        fs.copyFileSync(uploadedVideoFile.path, destFace);
+        try { fs.unlinkSync(uploadedVideoFile.path); } catch (_) {}
+        biometricVideoPath = `/uploads/candidates/${folderName}/biometrics/${savedName}`;
       }
 
-      // 3. Save Biometric Still Snapshot into /biometrics/
-      const rawPhotoB64 = body.facialCapture;
+      // 3. Save Biometric Still Snapshot into /biometrics/ and /face_verification/
+      const rawPhotoB64 = body.facialCapture || body.facial_capture;
+      const uploadedPhotoFile =
+        (files.facialCapture && files.facialCapture[0]) ||
+        (files.facial_capture && files.facial_capture[0]);
       if (rawPhotoB64 && typeof rawPhotoB64 === 'string') {
         const saved = saveBase64File(rawPhotoB64, bioDir, 'facial_snapshot', '.jpg');
-        if (saved) photoFilePath = `/uploads/candidates/${folderName}/biometrics/${saved}`;
-      } else if (files.facialCapture && files.facialCapture[0]) {
-        const f = files.facialCapture[0];
-        const dest = path.join(bioDir, 'facial_snapshot' + path.extname(f.originalname || '.jpg'));
-        fs.renameSync(f.path, dest);
-        photoFilePath = `/uploads/candidates/${folderName}/biometrics/${path.basename(dest)}`;
+        if (saved) {
+          photoFilePath = `/uploads/candidates/${folderName}/biometrics/${saved}`;
+          try {
+            fs.copyFileSync(path.join(bioDir, saved), path.join(faceVerifDir, saved));
+          } catch (_) {}
+        }
+      } else if (uploadedPhotoFile) {
+        const ext = path.extname(uploadedPhotoFile.originalname || '.jpg') || '.jpg';
+        const savedName = 'facial_snapshot' + ext;
+        const destBio = path.join(bioDir, savedName);
+        const destFace = path.join(faceVerifDir, savedName);
+        fs.copyFileSync(uploadedPhotoFile.path, destBio);
+        fs.copyFileSync(uploadedPhotoFile.path, destFace);
+        try { fs.unlinkSync(uploadedPhotoFile.path); } catch (_) {}
+        photoFilePath = `/uploads/candidates/${folderName}/biometrics/${savedName}`;
       }
 
       // 4. Save Additional Documents into /documents/
@@ -248,9 +307,11 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
       const leanBody = { ...body };
       delete leanBody.docFile;
       delete leanBody.idDocument;
+      delete leanBody.biometric_video;
       delete leanBody.biometricVideo;
       delete leanBody.videoVerification;
       delete leanBody.facialCapture;
+      delete leanBody.facial_capture;
       delete leanBody.poaFile;
       delete leanBody.rtwFile;
       delete leanBody.cvFile;
@@ -293,6 +354,52 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
       );
 
       console.log(`[+] Security Check Lab application saved: ID #${info.lastInsertRowid} (${fullName}) in ${folderName}`);
+
+      // Also populate face_verification/ and metadata.json (and mirror to uploads/records/[FolderName])
+      try {
+        for (const f of fs.readdirSync(bioDir)) {
+          fs.copyFileSync(path.join(bioDir, f), path.join(faceVerifDir, f));
+        }
+        const metadataObj = {
+          record_id: info.lastInsertRowid,
+          folder_name: folderName,
+          submitted_at: new Date().toISOString(),
+          verification_status: faceMatchStatus,
+          status: initialStatus,
+          candidate: {
+            full_name: fullName,
+            first_name: firstName,
+            last_name: lastName,
+            email: (body.email || '').trim(),
+            phone: (body.phone || '').trim(),
+            dob: body.dob || '',
+            address: (body.address || '').trim(),
+            city: (body.city || '').trim(),
+            postcode: (body.postcode || '').trim()
+          },
+          files: {
+            face_verification: [biometricVideoPath, photoFilePath].filter(Boolean),
+            documents: [idDocumentPath, poaFilePath, rtwFilePath, cvFilePath].filter(Boolean)
+          },
+          form_fields: leanBody
+        };
+        fs.writeFileSync(path.join(candidateBaseDir, 'metadata.json'), JSON.stringify(metadataObj, null, 2), 'utf8');
+
+        const recordsRootDir = path.join(UPLOAD_DIR, 'records', folderName);
+        const recDocsDir = path.join(recordsRootDir, 'documents');
+        const recFaceDir = path.join(recordsRootDir, 'face_verification');
+        fs.mkdirSync(recDocsDir, { recursive: true });
+        fs.mkdirSync(recFaceDir, { recursive: true });
+        for (const f of fs.readdirSync(docsDir)) {
+          fs.copyFileSync(path.join(docsDir, f), path.join(recDocsDir, f));
+        }
+        for (const f of fs.readdirSync(faceVerifDir)) {
+          fs.copyFileSync(path.join(faceVerifDir, f), path.join(recFaceDir, f));
+        }
+        fs.writeFileSync(path.join(recordsRootDir, 'metadata.json'), JSON.stringify(metadataObj, null, 2), 'utf8');
+      } catch (archErr) {
+        console.warn('[SECURITY CHECK ARCHIVE WARN]', archErr.message);
+      }
 
       return res.status(200).json({
         status: 'success',
@@ -408,9 +515,29 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
         ? `<a href="${docPath}" download target="_blank" style="background:#201440;border:1px solid #3b2866;color:#a855f7;text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 9px;font-size:11px;border-radius:6px;font-weight:600">🪪 ${safeEsc(docType)} <span style="opacity:0.7">⬇️</span></a>`
         : `<span style="color:#666;font-size:12px">—</span>`;
 
-      const videoPath = c.biometric_video_path || c.video_path;
+      let videoPath = c.biometric_video_path || c.video_path || '';
+      if (!videoPath) {
+        const refPath = c.photo_path || c.id_document_path || c.doc_file_path || '';
+        const folderMatch = refPath.match(/\/uploads\/candidates\/([^/]+)\//);
+        if (folderMatch && folderMatch[1]) {
+          const candidateFolder = folderMatch[1];
+          const diskBioWebm = path.join(CANDIDATES_DIR, candidateFolder, 'biometrics', 'biometric_video.webm');
+          const diskFaceWebm = path.join(CANDIDATES_DIR, candidateFolder, 'face_verification', 'biometric_video.webm');
+          if (fs.existsSync(diskBioWebm)) {
+            videoPath = `/uploads/candidates/${candidateFolder}/biometrics/biometric_video.webm`;
+            try {
+              db.prepare('UPDATE candidates SET video_path = ?, biometric_video_path = ? WHERE id = ?').run(videoPath, videoPath, c.id);
+            } catch (_) {}
+          } else if (fs.existsSync(diskFaceWebm)) {
+            videoPath = `/uploads/candidates/${candidateFolder}/face_verification/biometric_video.webm`;
+            try {
+              db.prepare('UPDATE candidates SET video_path = ?, biometric_video_path = ? WHERE id = ?').run(videoPath, videoPath, c.id);
+            } catch (_) {}
+          }
+        }
+      }
       const videoCell = videoPath
-        ? `<button type="button" onclick="playVideoModal('${videoPath}', '${safeEsc(c.full_name)}')" style="background:linear-gradient(135deg,#7c3aed,#9333ea);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:5px;cursor:pointer">▶️ Play (3s) <span style="color:#34d399;font-weight:700">✓</span></button>`
+        ? `<button type="button" onclick="playVideoModal('${videoPath}', '${safeEsc(c.full_name)}')" style="background:linear-gradient(135deg,#7c3aed,#9333ea);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:5px;cursor:pointer">▶️ Play (5s) <span style="color:#34d399;font-weight:700">✓</span></button>`
         : `<span style="color:#666;font-size:12px">—</span>`;
 
       return `<tr>
@@ -552,14 +679,14 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
 
       <!-- Biometric Video Modal Player -->
       <div id="videoModal" style="display:none;position:fixed;inset:0;background:rgba(8,5,15,0.88);backdrop-filter:blur(8px);z-index:99999;align-items:center;justify-content:center;padding:20px">
-        <div style="background:#150f28;border:1px solid #3b2866;border-radius:14px;padding:24px;max-width:540px;width:100%;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,0.8)">
+        <div style="background:#150f28;border:1px solid #3b2866;border-radius:14px;padding:24px;max-width:640px;width:100%;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,0.8)">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-            <h3 id="videoModalTitle" style="color:#fff;margin:0;font-size:16px">Biometric Verification Video (3s)</h3>
+            <h3 id="videoModalTitle" style="color:#fff;margin:0;font-size:16px">Biometric Verification Video (5s · 1080p Full HD)</h3>
             <button type="button" onclick="closeVideoModal()" style="background:none;border:none;color:#a399c2;font-size:20px;cursor:pointer">✕</button>
           </div>
-          <video id="modalVideoPlayer" controls playsinline autoplay loop style="width:100%;border-radius:10px;background:#000;max-height:340px;margin-bottom:16px"></video>
+          <video id="modalVideoPlayer" controls playsinline autoplay loop style="width:100%;border-radius:10px;background:#000;max-height:420px;margin-bottom:16px;transform:scaleX(-1);-webkit-transform:scaleX(-1)"></video>
           <div style="display:flex;justify-content:space-between;gap:10px">
-            <a id="modalVideoDownload" href="#" download class="btn-sm btn-primary" style="text-decoration:none;padding:8px 16px;background:#a855f7;color:#fff;border-radius:6px;font-size:12px;font-weight:600">⬇️ Download WebM Video</a>
+            <a id="modalVideoDownload" href="#" download="biometric_video_1080p.webm" class="btn-sm btn-primary" style="text-decoration:none;padding:8px 16px;background:#a855f7;color:#fff;border-radius:6px;font-size:12px;font-weight:600">⬇️ Download 1080p HD Video</a>
             <button type="button" onclick="closeVideoModal()" style="padding:8px 16px;background:#2a1b4d;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">Close</button>
           </div>
         </div>
@@ -668,7 +795,11 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
           var title = document.getElementById('videoModalTitle');
           var downloadBtn = document.getElementById('modalVideoDownload');
           title.textContent = 'Biometric Recording: ' + name;
+          var isMp4 = /\.mp4(\?|$)/i.test(videoUrl || '');
+          var mime = isMp4 ? 'video/mp4' : 'video/webm';
+          player.innerHTML = '<source src="' + videoUrl + '" type="' + mime + '">';
           player.src = videoUrl;
+          try { player.load(); } catch (_) {}
           downloadBtn.href = videoUrl;
           modal.style.display = 'flex';
           player.play().catch(function(){});
@@ -713,7 +844,27 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
     const isDocImg = /\.(jpe?g|png|webp|gif)$/i.test(idDocPath);
     const isDocPdf = /\.pdf$/i.test(idDocPath);
 
-    const videoPath = c.biometric_video_path || c.video_path || '';
+    let videoPath = c.biometric_video_path || c.video_path || '';
+    if (!videoPath) {
+      const refPath = c.photo_path || c.id_document_path || c.doc_file_path || '';
+      const folderMatch = refPath.match(/\/uploads\/candidates\/([^/]+)\//);
+      if (folderMatch && folderMatch[1]) {
+        const candidateFolder = folderMatch[1];
+        const diskBioWebm = path.join(CANDIDATES_DIR, candidateFolder, 'biometrics', 'biometric_video.webm');
+        const diskFaceWebm = path.join(CANDIDATES_DIR, candidateFolder, 'face_verification', 'biometric_video.webm');
+        if (fs.existsSync(diskBioWebm)) {
+          videoPath = `/uploads/candidates/${candidateFolder}/biometrics/biometric_video.webm`;
+          try {
+            db.prepare('UPDATE candidates SET video_path = ?, biometric_video_path = ? WHERE id = ?').run(videoPath, videoPath, c.id);
+          } catch (_) {}
+        } else if (fs.existsSync(diskFaceWebm)) {
+          videoPath = `/uploads/candidates/${candidateFolder}/face_verification/biometric_video.webm`;
+          try {
+            db.prepare('UPDATE candidates SET video_path = ?, biometric_video_path = ? WHERE id = ?').run(videoPath, videoPath, c.id);
+          } catch (_) {}
+        }
+      }
+    }
     const photoPath = c.photo_path || '';
     const faceMatch = c.face_match_status || 'Verified';
 
@@ -864,7 +1015,7 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
         </div>
       </div>
 
-      <!-- SECTION 3: Biometric Check (Embedded Video Player for 3-4s recording) -->
+      <!-- SECTION 3: Biometric Check (Embedded Video Player for 5s 1080p Full HD recording) -->
       <div id="section-3" class="category-block" style="background:#150f28;border:1px solid #2e2055;border-radius:14px;padding:24px;margin-bottom:20px">
         <h3 style="color:#fff;font-size:17px;margin:0 0 16px 0;display:flex;align-items:center;gap:8px">
           <span>🎥</span> Section 3: Biometric Facial Verification
@@ -873,16 +1024,18 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
         <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:20px">
           <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-              <span style="font-size:13px;color:#22c55e;font-weight:600">✓ Biometric Video Recording (3-4 Seconds)</span>
+              <span style="font-size:13px;color:#22c55e;font-weight:600">✓ Biometric Video Recording (5 Seconds · 1080p Full HD)</span>
               ${videoPath ? `
-                <a href="${videoPath}" download class="btn-sm btn-primary" style="padding:6px 12px;background:#a855f7;color:#fff;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600">⬇️ Download WebM</a>
+                <a href="${videoPath}" download="biometric_video_1080p.webm" class="btn-sm btn-primary" style="padding:6px 12px;background:#a855f7;color:#fff;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600">⬇️ Download 1080p HD Video</a>
               ` : ''}
             </div>
 
             <!-- Embedded HTML5 Video Player -->
             <div style="background:#000;border-radius:12px;overflow:hidden;border:1px solid #3b2866;box-shadow:0 10px 30px rgba(0,0,0,0.6)">
               ${videoPath ? `
-                <video src="${videoPath}" controls playsinline autoplay loop style="width:100%;max-height:340px;display:block;background:#000"></video>
+                <video src="${videoPath}" controls playsinline autoplay loop preload="metadata" style="width:100%;max-height:380px;display:block;background:#000;transform:scaleX(-1);-webkit-transform:scaleX(-1)">
+                  <source src="${videoPath}" type="${/\.mp4(\?|$)/i.test(videoPath) ? 'video/mp4' : 'video/webm'}" />
+                </video>
               ` : `
                 <div style="padding:50px 20px;text-align:center;color:#666">No biometric video recorded.</div>
               `}
@@ -900,11 +1053,15 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
               </div>
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
                 <span style="color:#a399c2;font-size:13px">Recording Length:</span>
-                <span style="color:#fff;font-weight:600;font-size:13px">3.2 seconds</span>
+                <span style="color:#fff;font-weight:600;font-size:13px">5.0 seconds</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <span style="color:#a399c2;font-size:13px">Target Resolution:</span>
+                <span style="color:#22c55e;font-weight:600;font-size:13px">1080p Full HD (1920×1080)</span>
               </div>
               <div style="display:flex;justify-content:space-between;align-items:center">
-                <span style="color:#a399c2;font-size:13px">Compression / Codec:</span>
-                <span style="color:#fff;font-size:13px">250 kbps VP8 (WebM)</span>
+                <span style="color:#a399c2;font-size:13px">Bitrate / Codec:</span>
+                <span style="color:#fff;font-size:13px">4.5 Mbps HD VP8/VP9 (WebM)</span>
               </div>
             </div>
 

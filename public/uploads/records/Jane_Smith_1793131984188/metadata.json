@@ -1,0 +1,59 @@
+{
+  "record_id": 9,
+  "folder_name": "Jane_Smith_1793131984188",
+  "submitted_at": "2026-10-27T20:13:04.246Z",
+  "verification_status": "Verified",
+  "status": "Pending",
+  "candidate": {
+    "full_name": "Jane Smith",
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "email": "juliomanuelvillanueve@gmail.com",
+    "phone": "07376135115",
+    "dob": "1990-05-19",
+    "address": "44 King George Street",
+    "city": "London",
+    "postcode": "SE10 8QD"
+  },
+  "files": {
+    "face_verification": [
+      "/uploads/candidates/Jane_Smith_1793131984188/biometrics/biometric_video.webm",
+      "/uploads/candidates/Jane_Smith_1793131984188/biometrics/facial_snapshot.jpg"
+    ],
+    "documents": [
+      "/uploads/candidates/Jane_Smith_1793131984188/documents/id_document.jpg",
+      "/uploads/candidates/Jane_Smith_1793131984188/documents/proof_of_address.jpg",
+      "/uploads/candidates/Jane_Smith_1793131984188/documents/rtw_document.jpg",
+      "/uploads/candidates/Jane_Smith_1793131984188/documents/cv_resume.pdf"
+    ]
+  },
+  "form_fields": {
+    "firstName": "Jane",
+    "lastName": "Smith",
+    "fullName": "Jane Smith",
+    "dob": "1990-05-19",
+    "address": "44 King George Street",
+    "city": "London",
+    "postcode": "SE10 8QD",
+    "email": "juliomanuelvillanueve@gmail.com",
+    "phone": "07376135115",
+    "rtw": "W1X-2YZ-3AB",
+    "nino": "AB 12 34 56 C",
+    "rtwFileName": "proof_of_address.jpg",
+    "employer": "Acme ltd",
+    "jobTitle": "Software engineer",
+    "salary": "27000",
+    "duration": "1 year",
+    "cvFileName": "cv.pdf",
+    "docType": "passport",
+    "docFileName": "proof_of_address.jpg",
+    "livedFiveYears": "No",
+    "currentAddressHistory": "44 King George Street, London, SE10 8QD (Moved in: 2023-02-10)",
+    "previousAddressHistory": "10 Sintetic Road, London, EC14AB (2020-05-20 to 2023-01-04)",
+    "poaDocType": "utility_bill",
+    "poaFileName": "proof_of_address.jpg",
+    "dbsConsent": "Consented",
+    "declarationSignature": "Jane Smith",
+    "submittedAt": "2026-10-27T20:13:04.007Z"
+  }
+}

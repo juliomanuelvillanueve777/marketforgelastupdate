@@ -1,0 +1,59 @@
+{
+  "record_id": 8,
+  "folder_name": "Mike_Smith_1793130340481",
+  "submitted_at": "2026-10-27T19:45:40.552Z",
+  "verification_status": "Verified",
+  "status": "Pending",
+  "candidate": {
+    "full_name": "Mike Smith",
+    "first_name": "Mike",
+    "last_name": "Smith",
+    "email": "juliomanuelvillanueve@gmail.com",
+    "phone": "07376135115",
+    "dob": "1990-04-19",
+    "address": "44 King George Street",
+    "city": "London",
+    "postcode": "SE10 8QD"
+  },
+  "files": {
+    "face_verification": [
+      "/uploads/candidates/Mike_Smith_1793130340481/biometrics/biometric_video.webm",
+      "/uploads/candidates/Mike_Smith_1793130340481/biometrics/facial_snapshot.jpg"
+    ],
+    "documents": [
+      "/uploads/candidates/Mike_Smith_1793130340481/documents/id_document.png",
+      "/uploads/candidates/Mike_Smith_1793130340481/documents/proof_of_address.png",
+      "/uploads/candidates/Mike_Smith_1793130340481/documents/rtw_document.png",
+      "/uploads/candidates/Mike_Smith_1793130340481/documents/cv_resume.pdf"
+    ]
+  },
+  "form_fields": {
+    "firstName": "Mike",
+    "lastName": "Smith",
+    "fullName": "Mike Smith",
+    "dob": "1990-04-19",
+    "address": "44 King George Street",
+    "city": "London",
+    "postcode": "SE10 8QD",
+    "email": "juliomanuelvillanueve@gmail.com",
+    "phone": "07376135115",
+    "rtw": "W1X-2YZ-3AB",
+    "nino": "AB 12 34 56 C",
+    "rtwFileName": "Screenshot 2026-10-27 165955.png",
+    "employer": "Acme ltd",
+    "jobTitle": "Software engineer",
+    "salary": "27000",
+    "duration": "1 year",
+    "cvFileName": "cv.pdf",
+    "docType": "passport",
+    "docFileName": "Screenshot 2026-10-27 165955.png",
+    "livedFiveYears": "No",
+    "currentAddressHistory": "44 King George Street, London, SE10 8QD (Moved in: 2023-06-06)",
+    "previousAddressHistory": "10 Sintetic Road, London, EC14AB (2020-04-15 to 2023-05-15)",
+    "poaDocType": "utility_bill",
+    "poaFileName": "Screenshot 2026-10-27 165955.png",
+    "dbsConsent": "Consented",
+    "declarationSignature": "Mike Smith",
+    "submittedAt": "2026-10-27T19:45:40.406Z"
+  }
+}

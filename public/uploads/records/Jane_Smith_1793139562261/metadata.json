@@ -1,0 +1,55 @@
+{
+  "record_id": 12,
+  "folder_name": "Jane_Smith_1793139562261",
+  "submitted_at": "2026-10-27T22:19:22.302Z",
+  "verification_status": "Verified",
+  "status": "Pending",
+  "candidate": {
+    "full_name": "Jane Smith",
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "email": "janesmith@gmail.com",
+    "phone": "07376135115",
+    "dob": "1994-11-27",
+    "address": "10 Downing Street",
+    "city": "London",
+    "postcode": "EC15SA"
+  },
+  "files": {
+    "face_verification": [
+      "/uploads/candidates/Jane_Smith_1793139562261/biometrics/biometric_video.mp4",
+      "/uploads/candidates/Jane_Smith_1793139562261/biometrics/facial_snapshot.jpg"
+    ],
+    "documents": [
+      "/uploads/candidates/Jane_Smith_1793139562261/documents/id_document.jpeg",
+      "/uploads/candidates/Jane_Smith_1793139562261/documents/proof_of_address.jpeg",
+      "/uploads/candidates/Jane_Smith_1793139562261/documents/rtw_document.jpeg",
+      "/uploads/candidates/Jane_Smith_1793139562261/documents/cv_resume.pdf"
+    ]
+  },
+  "form_fields": {
+    "firstName": "Jane",
+    "lastName": "Smith",
+    "fullName": "Jane Smith",
+    "dob": "1994-11-27",
+    "address": "10 Downing Street",
+    "city": "London",
+    "postcode": "EC15SA",
+    "email": "janesmith@gmail.com",
+    "phone": "07376135115",
+    "rtw": "W1X-2YZ-3AB",
+    "nino": "AB 12 34 56 C",
+    "employer": "Acme ltd",
+    "jobTitle": "Soft enginer",
+    "salary": "27000",
+    "duration": "1 year",
+    "docType": "passport",
+    "livedFiveYears": "No",
+    "currentAddressHistory": "10 Downing Street, London, EC15SA (Moved in: 2023-06-27)",
+    "previousAddressHistory": "24High Street, London, EC22GA (2020-10-27 to 2023-05-27)",
+    "poaDocType": "utility_bill",
+    "dbsConsent": "Consented",
+    "declarationSignature": "Jane Smith",
+    "submittedAt": "2026-10-27T22:19:20.228Z"
+  }
+}

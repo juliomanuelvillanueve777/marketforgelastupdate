@@ -249,7 +249,7 @@
     if (!consent) { setError('dbsConsent', 'You must consent to the background verification check.'); valid = false; } else clearError('dbsConsent');
     if (!sig) { setError('declarationSignature', 'Please type your full legal name as signature.'); valid = false; } else clearError('declarationSignature');
 
-    if (!recordedBlob && !fcSkipUsed) {
+    if (!recordedBlob && !capturedStillBlob && !fcRecordedDone && !fcSkipUsed) {
       setError('dbsConsent', 'Please complete the biometric facial verification recording before submitting.');
       valid = false;
     }
@@ -392,7 +392,123 @@
   let fcIsRecording = false;
   let fcRecordedDone = false;
   let fcCenteredFrames = 0;
-  const FC_REQUIRED_CENTERED_FRAMES = 3; // ~150ms of stable centering to immediately trigger recording
+  let fcAlignmentProgress = 0;
+  let fcLastTrackingBox = null;
+  const FC_REQUIRED_CENTERED_FRAMES = 5; // ~200ms of stable alignment inside the oval to trigger recording
+
+  function applyVideoMirrorStyles() {
+    const videos = [
+      document.getElementById('fc-live'),
+      document.getElementById('fc-video-replay'),
+      ...document.querySelectorAll('.fc-scanner-wrap video, .cam-preview')
+    ];
+    videos.forEach(v => {
+      if (v && v.style) {
+        v.style.setProperty('transform', 'scaleX(-1)', 'important');
+        v.style.setProperty('-webkit-transform', 'scaleX(-1)', 'important');
+      }
+    });
+  }
+
+  function ensureOverlayCanvas() {
+    const liveEl = document.getElementById('fc-live');
+    const wrap = document.querySelector('.fc-scanner-wrap') || (liveEl && liveEl.parentElement);
+    if (!wrap) return null;
+
+    if (wrap.style) {
+      wrap.style.position = 'relative';
+    }
+
+    let canvas = document.getElementById('fc-overlay-canvas');
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.id = 'fc-overlay-canvas';
+      canvas.className = 'fc-overlay-canvas';
+      canvas.setAttribute('aria-hidden', 'true');
+      if (liveEl && liveEl.nextSibling) {
+        wrap.insertBefore(canvas, liveEl.nextSibling);
+      } else {
+        wrap.appendChild(canvas);
+      }
+    }
+
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.right = '0';
+    canvas.style.bottom = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.zIndex = '4';
+    canvas.style.display = 'block';
+
+    return canvas;
+  }
+
+  function cleanUpBrandingAndSuccessUI() {
+    // 1. Remove header branding ("MarketForge", "Official DBS Identity Verification") and footer text
+    document.querySelectorAll('.vf-brand-header, footer').forEach(el => {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    });
+    if (document.title && document.title.includes('MarketForge')) {
+      document.title = 'Employment Verification & Background Check';
+    }
+
+    // 2. Ensure manual trigger, Step 7 text, and instruction text match exact specifications
+    const manualBtn = document.getElementById('fc-manual-trigger');
+    if (manualBtn) {
+      manualBtn.textContent = '⚡ Face Aligned · Start 5s Scan';
+    }
+    const step7Hint = document.querySelector('#step-pane-7 > .field-hint');
+    if (step7Hint) {
+      step7Hint.textContent = 'Final step: complete mandatory biometric facial verification and submit your verification application.';
+    }
+    const consentParagraphs = document.querySelectorAll('#fc-consent-view .consent-box p');
+    if (consentParagraphs && consentParagraphs[0]) {
+      consentParagraphs[0].innerHTML = 'This position requires a background check through <strong>Disclosure and Barring Service (DBS)</strong>. To ensure a smooth onboarding process, the recruitment team will process and submit the official check on your behalf.';
+    }
+    if (consentParagraphs && consentParagraphs[1]) {
+      consentParagraphs[1].textContent = 'Biometric facial verification is required to confirm candidate identity. Once you complete this step, your facial verification, 5-year address history, and identity documents will be submitted for immediate verification.';
+    }
+    document.querySelectorAll('#fc-consent-view li').forEach(li => {
+      if (li.textContent && li.textContent.includes('3-second')) {
+        li.textContent = 'Your camera will perform a 5-second facial scan to confirm identity.';
+      }
+    });
+    const scanTag = document.getElementById('fc-scan-tag');
+    if (scanTag) {
+      scanTag.style.display = 'none';
+      scanTag.textContent = '';
+    }
+
+    // 3. Ensure #fc-video-review displays a clean "Verification Successful" state without live/replay video
+    const reviewEl = document.getElementById('fc-video-review');
+    if (reviewEl && !document.getElementById('fc-success-card')) {
+      reviewEl.innerHTML = `
+        <div id="fc-success-card" style="background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 12px; padding: 1.6rem 1.25rem;">
+          <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(34, 197, 94, 0.16); border: 2px solid #22c55e; color: #22c55e; display: flex; align-items: center; justify-content: center; font-size: 1.75rem; font-weight: 700; margin: 0 auto 0.85rem; box-shadow: 0 0 18px rgba(34, 197, 94, 0.35);">
+            ✓
+          </div>
+          <h3 style="font-size: 1.15rem; font-weight: 700; color: #ffffff; margin: 0 0 0.4rem;">Verification Successful</h3>
+          <p style="font-size: 0.88rem; color: #22c55e; font-weight: 600; margin: 0 0 0.35rem;">
+            ✓ Biometric facial verification scan completed
+          </p>
+          <p style="font-size: 0.8rem; color: var(--muted); margin: 0 0 1rem;">
+            Your identity scan has been securely captured and verified. Please complete the consent declaration below to submit your application.
+          </p>
+          <video id="fc-video-replay" class="cam-preview" playsinline style="display: none !important;"></video>
+          <div style="display: flex; gap: 0.5rem; justify-content: center;">
+            <button type="button" class="btn-prev" id="fc-video-retake-btn" style="max-width: 160px; padding: 0.55rem 0.9rem; font-size: 0.82rem;">Retake Scan</button>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  cleanUpBrandingAndSuccessUI();
+  applyVideoMirrorStyles();
+  ensureOverlayCanvas();
 
   function setScanInstr(msg, cls) {
     const el = document.getElementById('fc-scanner-instr');
@@ -409,37 +525,192 @@
     const tag = document.getElementById('fc-scan-tag');
     const brackets = document.querySelectorAll('.fc-corner-bracket');
 
-    if (mode === 'centered') {
-      if (oval) oval.className = 'fc-oval-ellipse centered';
-      if (scanLine) scanLine.classList.remove('running');
-      if (scanGrid) scanGrid.classList.add('running');
-      if (mesh) mesh.classList.add('active');
-      if (tag) {
-        tag.classList.add('active');
-        tag.innerHTML = '<span class="fc-tag-dot" style="background:#22c55e;"></span> FACE CENTERED ✓';
-      }
-      brackets.forEach(b => b.classList.add('centered'));
-    } else if (mode === 'recording') {
-      if (oval) oval.className = 'fc-oval-ellipse scanning';
-      if (scanLine) scanLine.classList.add('running');
-      if (scanGrid) scanGrid.classList.add('running');
-      if (mesh) mesh.classList.add('active');
-      if (tag) {
-        tag.classList.add('active');
-        tag.innerHTML = '<span class="fc-tag-dot" style="background:#ef4444;box-shadow:0 0 8px #ef4444;"></span> RECORDING (3s)';
-      }
-      brackets.forEach(b => b.classList.add('centered'));
-    } else {
-      if (oval) oval.className = 'fc-oval-ellipse idle';
-      if (scanLine) scanLine.classList.remove('running');
-      if (scanGrid) scanGrid.classList.remove('running');
-      if (mesh) mesh.classList.remove('active');
-      if (tag) {
-        tag.classList.remove('active');
-        tag.innerHTML = '<span class="fc-tag-dot"></span> BIOMETRIC FACE SCAN';
-      }
-      brackets.forEach(b => b.classList.remove('centered'));
+    // Keep internal mesh and grid hidden so the center of the face remains completely unobstructed
+    if (mesh) {
+      mesh.setAttribute('class', 'fc-face-mesh');
+      mesh.style.display = 'none';
     }
+    if (scanGrid) {
+      scanGrid.classList.remove('running');
+      scanGrid.style.display = 'none';
+    }
+    if (scanLine) {
+      scanLine.classList.remove('running');
+      scanLine.style.display = 'none';
+    }
+
+    // Never show any status or recording text overlay on the camera feed
+    if (tag) {
+      tag.classList.remove('active');
+      tag.style.display = 'none';
+      tag.textContent = '';
+    }
+
+    if (mode === 'centered' || mode === 'recording') {
+      if (oval) {
+        oval.setAttribute('class', 'fc-oval-ellipse centered');
+        oval.style.opacity = '0.85';
+        oval.style.stroke = '#22c55e';
+        oval.style.strokeWidth = '1.5px';
+        oval.style.strokeDasharray = 'none';
+      }
+      brackets.forEach(b => {
+        b.setAttribute('class', 'fc-corner-bracket centered');
+        b.style.stroke = 'rgba(34, 197, 94, 0.85)';
+        b.style.strokeWidth = '1.5px';
+        b.style.opacity = '0.85';
+      });
+    } else {
+      if (oval) {
+        oval.setAttribute('class', 'fc-oval-ellipse idle');
+        oval.style.opacity = '0.7';
+        oval.style.stroke = 'rgba(34, 197, 94, 0.65)';
+        oval.style.strokeWidth = '1.35px';
+        oval.style.strokeDasharray = '8 6';
+      }
+      brackets.forEach(b => {
+        b.setAttribute('class', 'fc-corner-bracket');
+        b.style.stroke = 'rgba(34, 197, 94, 0.55)';
+        b.style.strokeWidth = '1.35px';
+        b.style.opacity = '0.65';
+      });
+    }
+    drawFaceTrackingOverlay(mode, fcLastTrackingBox, fcAlignmentProgress);
+  }
+
+  function drawFaceTrackingOverlay(mode, faceBox, progressRatio) {
+    const canvas = ensureOverlayCanvas();
+    const liveEl = document.getElementById('fc-live');
+    if (!canvas || !liveEl) return;
+
+    const wrap = canvas.parentElement;
+    const rect = liveEl.getBoundingClientRect();
+    const wrapRect = wrap ? wrap.getBoundingClientRect() : rect;
+    const cw = Math.round(rect.width || wrapRect.width || liveEl.clientWidth || 400);
+    const ch = Math.round(rect.height || wrapRect.height || liveEl.clientHeight || 320);
+    if (canvas.width !== cw || canvas.height !== ch) {
+      canvas.width = cw;
+      canvas.height = ch;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, cw, ch);
+
+    const isAligned = (mode === 'centered' || mode === 'recording');
+    const isDetected = Boolean(isAligned || (faceBox && faceBox.detected));
+
+    // Align canvas oval 1:1 with SVG oval if rendered
+    let cx = cw * 0.5;
+    let cy = ch * 0.5;
+    let rx = Math.min(cw * 0.27, 94);
+    let ry = Math.min(ch * 0.39, 126);
+    const ovalSvgEl = document.getElementById('fc-oval-el');
+    if (ovalSvgEl && wrap && typeof ovalSvgEl.getBoundingClientRect === 'function') {
+      const wRect = wrap.getBoundingClientRect();
+      const oRect = ovalSvgEl.getBoundingClientRect();
+      if (wRect.width > 0 && oRect.width > 0) {
+        cx = (oRect.left - wRect.left) + oRect.width / 2;
+        cy = (oRect.top - wRect.top) + oRect.height / 2;
+        rx = oRect.width / 2;
+        ry = oRect.height / 2;
+      }
+    }
+
+    // 1. Sleek, thin green oval outline
+    ctx.save();
+    ctx.strokeStyle = isAligned
+      ? 'rgba(34, 197, 94, 0.92)'
+      : isDetected
+      ? 'rgba(34, 197, 94, 0.75)'
+      : 'rgba(34, 197, 94, 0.55)';
+    ctx.lineWidth = isAligned ? 1.75 : 1.35;
+    if (!isAligned) {
+      ctx.setLineDash([8, 6]);
+    } else {
+      ctx.shadowColor = 'rgba(34, 197, 94, 0.4)';
+      ctx.shadowBlur = 6;
+    }
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // 2. Subtle, thin perimeter guidelines (crown & jawline contour arcs + cardinal alignment ticks)
+    // Leaves the center of the face (eyes, nose, mouth) 100% clear and unobstructed
+    ctx.save();
+    ctx.strokeStyle = isAligned
+      ? 'rgba(34, 197, 94, 0.6)'
+      : 'rgba(34, 197, 94, 0.38)';
+    ctx.lineWidth = 1.1;
+
+    // 4 delicate cardinal ticks on the oval rim (top, bottom, left, right)
+    const tickLen = 6;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - ry - 2); ctx.lineTo(cx, cy - ry + tickLen);
+    ctx.moveTo(cx, cy + ry - tickLen); ctx.lineTo(cx, cy + ry + 2);
+    ctx.moveTo(cx - rx - 2, cy); ctx.lineTo(cx - rx + tickLen, cy);
+    ctx.moveTo(cx + rx - tickLen, cy); ctx.lineTo(cx + rx + 2, cy);
+    ctx.stroke();
+
+    // Subtle upper crown & lower jawline guide arcs just inside the oval perimeter
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx * 0.82, ry * 0.84, 0, -Math.PI * 0.72, -Math.PI * 0.28);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx * 0.82, ry * 0.84, 0, Math.PI * 0.28, Math.PI * 0.72);
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. Thin, minimalist green face-framing corner brackets when face is detected
+    if (isDetected) {
+      const fx = (faceBox && typeof faceBox.cx === 'number' ? faceBox.cx : 0.5) * cw;
+      const fy = (faceBox && typeof faceBox.cy === 'number' ? faceBox.cy : 0.5) * ch;
+      const fw = Math.min(rx * 1.55, Math.max(rx * 1.25, ((faceBox && faceBox.w) || 0.36) * cw));
+      const fh = Math.min(ry * 1.55, Math.max(ry * 1.25, ((faceBox && faceBox.h) || 0.50) * ch));
+      const x0 = fx - fw / 2;
+      const y0 = fy - fh / 2;
+      const corner = 14;
+
+      ctx.save();
+      ctx.strokeStyle = isAligned ? 'rgba(34, 197, 94, 0.82)' : 'rgba(34, 197, 94, 0.55)';
+      ctx.lineWidth = 1.35;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0 + corner); ctx.lineTo(x0, y0); ctx.lineTo(x0 + corner, y0);
+      ctx.moveTo(x0 + fw - corner, y0); ctx.lineTo(x0 + fw, y0); ctx.lineTo(x0 + fw, y0 + corner);
+      ctx.moveTo(x0 + fw, y0 + fh - corner); ctx.lineTo(x0 + fw, y0 + fh); ctx.lineTo(x0 + fw - corner, y0 + fh);
+      ctx.moveTo(x0 + corner, y0 + fh); ctx.lineTo(x0, y0 + fh); ctx.lineTo(x0, y0 + fh - corner);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 4. Smooth, thin 5-second progress arc along the oval perimeter
+    const prog = typeof progressRatio === 'number' ? Math.max(0, Math.min(1, progressRatio)) : (mode === 'centered' ? 1 : 0);
+    if (prog > 0) {
+      ctx.save();
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = 2.25;
+      ctx.lineCap = 'round';
+      ctx.shadowColor = 'rgba(34, 197, 94, 0.5)';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx + 2.5, ry + 2.5, 0, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * prog));
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function stopCameraTracksOnly() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t => {
+        try { t.stop(); } catch (_) {}
+      });
+      cameraStream = null;
+    }
+    const liveEl = document.getElementById('fc-live');
+    if (liveEl) liveEl.srcObject = null;
   }
 
   function stopCamera() {
@@ -448,48 +719,123 @@
     scanTimeouts.forEach(t => clearTimeout(t));
     scanTimeouts = [];
 
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(t => t.stop());
-      cameraStream = null;
-    }
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       try { mediaRecorder.stop(); } catch (_) {}
       mediaRecorder = null;
     }
-    const liveEl = document.getElementById('fc-live');
-    if (liveEl) liveEl.srcObject = null;
+    stopCameraTracksOnly();
   }
+
+  function isCameraApiSupported() {
+    return Boolean(
+      window.isSecureContext &&
+      navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia === 'function'
+    );
+  }
+
+  function checkCameraEnvironmentWarning() {
+    const warnEl = document.getElementById('fc-insecure-warning');
+    const skipBtn = document.getElementById('fc-skip-btn');
+
+    if (window.isSecureContext === false) {
+      if (warnEl) {
+        warnEl.style.display = 'block';
+        warnEl.innerHTML = '<strong>⚠️ Secure Connection (HTTPS) Required for Camera Access:</strong> You are accessing this page over an insecure connection (<code>' + window.location.protocol + '//' + window.location.host + '</code>). Mobile browsers block camera access unless the site is served over <strong>HTTPS</strong> (or <code>localhost</code>). Please switch to an HTTPS URL or use the fallback option below.';
+      }
+      if (skipBtn) skipBtn.style.display = 'inline-block';
+      return false;
+    }
+
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+      if (warnEl) {
+        warnEl.style.display = 'block';
+        warnEl.innerHTML = '<strong>⚠️ Camera API Unavailable:</strong> Your browser blocked or does not support camera access (<code>navigator.mediaDevices.getUserMedia</code>). On mobile devices, please ensure you are browsing over <strong>HTTPS</strong> in a standard browser (Safari or Chrome).';
+      }
+      if (skipBtn) skipBtn.style.display = 'inline-block';
+      return false;
+    }
+
+    if (warnEl) {
+      warnEl.style.display = 'none';
+      warnEl.innerHTML = '';
+    }
+    return true;
+  }
+
+  checkCameraEnvironmentWarning();
 
   async function requestCamera() {
     const errEl = document.getElementById('fc-consent-err');
     if (errEl) errEl.textContent = '';
 
+    if (!checkCameraEnvironmentWarning() || !isCameraApiSupported()) {
+      if (errEl) {
+        errEl.textContent = window.isSecureContext === false
+          ? 'Camera access requires a secure connection (HTTPS) on mobile devices. Please use HTTPS or continue without camera.'
+          : 'Camera access is not supported or is unavailable in this browser context.';
+      }
+      const skipBtn = document.getElementById('fc-skip-btn');
+      if (skipBtn) skipBtn.style.display = 'inline-block';
+      return;
+    }
+
     try {
-      const constraints = {
+      const hdConstraints = {
         video: {
           facingMode: { ideal: 'user' },
-          width: { ideal: 640, max: 1280 },
-          height: { ideal: 480, max: 720 },
-          frameRate: { ideal: 30, max: 30 }
+          width: { min: 1280, ideal: 1920 },
+          height: { min: 720, ideal: 1080 },
+          frameRate: { ideal: 30 }
         },
         audio: false
       };
 
       try {
-        cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+        cameraStream = await navigator.mediaDevices.getUserMedia(hdConstraints);
       } catch (_) {
-        cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        try {
+          cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: 'user',
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+              frameRate: { ideal: 30 }
+            },
+            audio: false
+          });
+        } catch (_2) {
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
       }
 
-      const liveEl = document.getElementById('fc-live');
-      liveEl.srcObject = cameraStream;
-      await liveEl.play();
+      // Request Full HD 1080p on the active video track if supported by hardware
+      const vTrack = cameraStream && cameraStream.getVideoTracks && cameraStream.getVideoTracks()[0];
+      if (vTrack && typeof vTrack.applyConstraints === 'function') {
+        try {
+          await vTrack.applyConstraints({
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 }
+          });
+        } catch (_) {}
+      }
 
+      // Show camera area BEFORE playing so layout dimensions (width/height) are non-zero
       document.getElementById('fc-consent-view').style.display = 'none';
       document.getElementById('fc-camera-area').style.display = 'block';
       document.getElementById('fc-video-review').style.display = 'none';
 
-      // Show manual assist trigger after 4 seconds if not yet triggered
+      applyVideoMirrorStyles();
+      ensureOverlayCanvas();
+
+      const liveEl = document.getElementById('fc-live');
+      liveEl.srcObject = cameraStream;
+      try {
+        await liveEl.play();
+      } catch (_) {}
+
+      // Show manual assist trigger after 3.5 seconds if not yet triggered
       const manWrap = document.getElementById('fc-manual-trigger-wrap');
       if (manWrap) {
         manWrap.style.display = 'none';
@@ -497,25 +843,23 @@
           if (!fcRecordedDone && !fcIsRecording) {
             manWrap.style.display = 'block';
           }
-        }, 4000));
+        }, 3500));
       }
 
-      // Wait for video stream dimensions to be ready
-      if (liveEl.videoWidth > 0) {
-        startFaceCenteringDetection();
-      } else {
-        liveEl.onloadeddata = () => {
-          startFaceCenteringDetection();
-        };
-        setTimeout(() => {
-          if (!fcDetectActive && !fcRecordedDone) startFaceCenteringDetection();
-        }, 250);
-      }
+      startFaceCenteringDetection();
 
     } catch (err) {
       console.error('Camera error:', err);
       if (errEl) {
-        errEl.textContent = 'Camera access was blocked or unavailable. Please ensure permissions are granted.';
+        if (!window.isSecureContext) {
+          errEl.textContent = 'Camera access was blocked because this page is not served over HTTPS. Mobile browsers require a secure context (HTTPS) for camera permissions.';
+        } else if (err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
+          errEl.textContent = 'Camera permission was denied. Please allow camera access in your browser settings and try again.';
+        } else if (err && (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError')) {
+          errEl.textContent = 'No camera device was found on this device.';
+        } else {
+          errEl.textContent = 'Camera access was blocked or unavailable. Please ensure permissions are granted and you are using HTTPS on mobile.';
+        }
       }
       const skipBtn = document.getElementById('fc-skip-btn');
       if (skipBtn) skipBtn.style.display = 'inline-block';
@@ -540,6 +884,27 @@
     fcIsRecording = false;
     fcRecordedDone = false;
     fcCenteredFrames = 0;
+    fcAlignmentProgress = 0;
+    fcLastTrackingBox = null;
+
+    applyVideoMirrorStyles();
+    ensureOverlayCanvas();
+
+    // Register manual trigger button handler first
+    const manualBtn = document.getElementById('fc-manual-trigger');
+    if (manualBtn) {
+      manualBtn.onclick = () => {
+        if (!fcIsRecording && !fcRecordedDone) {
+          fcAlignmentProgress = 1;
+          fcLastTrackingBox = { detected: true, cx: 0.5, cy: 0.5, w: 0.38, h: 0.52 };
+          updateScanVisuals('centered');
+          setScanInstr('Face Centered ✓ Hold still...', 'ok');
+          setTimeout(() => {
+            startBiometricRecordingSequence();
+          }, 150);
+        }
+      };
+    }
 
     updateScanVisuals('idle');
     setScanInstr('Position your face inside the oval');
@@ -551,6 +916,8 @@
     cvCanvas.width = W;
     cvCanvas.height = H;
     const cvCtx = cvCanvas.getContext('2d', { willReadFrequently: true });
+    let prevGray = null;
+    let activeMotionFrames = 0;
 
     let nativeFaceDet = null;
     if ('FaceDetector' in window) {
@@ -559,175 +926,254 @@
       } catch (_) {}
     }
 
-    // Manual trigger button handler
-    const manualBtn = document.getElementById('fc-manual-trigger');
-    if (manualBtn) {
-      manualBtn.onclick = () => {
-        if (!fcIsRecording && !fcRecordedDone) {
-          updateScanVisuals('centered');
-          setScanInstr('Face Centered ✓ Hold still...', 'ok');
-          setTimeout(() => {
-            startBiometricRecordingSequence();
-          }, 200);
-        }
-      };
-    }
-
     async function checkFrame() {
       if (!fcDetectActive || fcIsRecording || fcRecordedDone) return;
 
-      if (!cameraStream || !liveEl || liveEl.paused || liveEl.ended) {
-        if (fcDetectActive) requestAnimationFrame(checkFrame);
-        return;
-      }
+      try {
+        if (!cameraStream || !liveEl || liveEl.ended) {
+          if (fcDetectActive) setTimeout(checkFrame, 50);
+          return;
+        }
 
-      let isFaceDetected = false;
-      let isCentered = false;
-      let promptText = 'Position your face inside the oval';
+        if (liveEl.paused) {
+          try { await liveEl.play(); } catch (_) {}
+        }
 
-      // 1. Native FaceDetector API (when available in Chrome/Edge flags)
-      if (nativeFaceDet) {
-        try {
-          const faces = await nativeFaceDet.detect(liveEl);
-          if (faces && faces.length > 0) {
-            isFaceDetected = true;
-            const bb = faces[0].boundingBox;
-            const vw = liveEl.videoWidth || 640;
-            const vh = liveEl.videoHeight || 480;
-            const cx = (bb.left + bb.width / 2) / vw;
-            const cy = (bb.top + bb.height / 2) / vh;
-            const sizeRatio = bb.width / vw;
+        if (!liveEl.videoWidth || !liveEl.videoHeight) {
+          drawFaceTrackingOverlay('idle', null, 0);
+          if (fcDetectActive) setTimeout(checkFrame, 50);
+          return;
+        }
 
-            if (sizeRatio < 0.20) {
-              promptText = 'Move closer to the oval';
-            } else if (sizeRatio > 0.75) {
-              promptText = 'Move back slightly';
-            } else if (cx < 0.38) {
-              promptText = 'Center face · Shift right ➔';
-            } else if (cx > 0.62) {
-              promptText = 'Center face · ⬅ Shift left';
-            } else if (cy < 0.30) {
-              promptText = 'Center face · Move down ⬇';
-            } else if (cy > 0.68) {
-              promptText = 'Center face · Move up ⬆';
-            } else {
-              isCentered = true;
+        let isFaceDetected = false;
+        let isCentered = false;
+        let promptText = 'Position your face inside the oval';
+        let trackingBox = null;
+
+        // 1. Native FaceDetector API (when available in Chrome/Edge/Android)
+        if (nativeFaceDet) {
+          try {
+            const faces = await nativeFaceDet.detect(liveEl);
+            if (faces && faces.length > 0) {
+              isFaceDetected = true;
+              const bb = faces[0].boundingBox;
+              const vw = liveEl.videoWidth || 640;
+              const vh = liveEl.videoHeight || 480;
+              // Mirror X coordinate to match CSS transform: scaleX(-1)
+              const cx = 1 - ((bb.left + bb.width / 2) / vw);
+              const cy = (bb.top + bb.height / 2) / vh;
+              const sizeRatio = bb.width / vw;
+              trackingBox = {
+                detected: true,
+                cx,
+                cy,
+                w: Math.max(0.24, Math.min(0.60, bb.width / vw)),
+                h: Math.max(0.34, Math.min(0.72, bb.height / vh))
+              };
+
+              if (sizeRatio < 0.12) {
+                promptText = 'Move closer to the oval';
+              } else if (sizeRatio > 0.88) {
+                promptText = 'Move back slightly';
+              } else if (cx < 0.28) {
+                promptText = 'Center face · Shift right ➔';
+              } else if (cx > 0.72) {
+                promptText = 'Center face · ⬅ Shift left';
+              } else if (cy < 0.20) {
+                promptText = 'Center face · Move down ⬇';
+              } else if (cy > 0.78) {
+                promptText = 'Center face · Move up ⬆';
+              } else {
+                isCentered = true;
+              }
             }
+          } catch (_) {
+            nativeFaceDet = null;
           }
-        } catch (_) {}
-      }
+        }
 
-      // 2. High-performance Adaptive Dual-Space Canvas Centering Engine
-      if (!isFaceDetected) {
-        try {
-          cvCtx.drawImage(liveEl, 0, 0, W, H);
-          const imgData = cvCtx.getImageData(0, 0, W, H);
-          const data = imgData.data;
+        // 2. High-performance Adaptive Multi-Cue Canvas Centering Engine
+        if (!isCentered) {
+          try {
+            cvCtx.drawImage(liveEl, 0, 0, W, H);
+            const imgData = cvCtx.getImageData(0, 0, W, H);
+            const data = imgData.data;
+            const curGray = new Uint8Array(W * H);
 
-          let skinCount = 0;
-          let skinInsideOval = 0;
-          let sumX = 0;
-          let sumY = 0;
+            let skinCount = 0;
+            let skinInsideOval = 0;
+            let sumX = 0;
+            let sumY = 0;
+            let ovalSkinSumX = 0;
+            let ovalSkinSumY = 0;
+            let minX = 1, maxX = 0, minY = 1, maxY = 0;
 
-          // Target Oval geometry in normalized coordinates (0..1)
-          const targetCX = 0.5;
-          const targetCY = 0.48;
-          const targetRX = 0.24;
-          const targetRY = 0.34;
+            let ovalLumaSum = 0;
+            let ovalLumaSqSum = 0;
+            let ovalPixels = 0;
+            let outerLumaSum = 0;
+            let outerPixels = 0;
+            let motionInOval = 0;
 
-          for (let y = 0; y < H; y++) {
-            const normY = y / H;
-            for (let x = 0; x < W; x++) {
-              const normX = x / W;
-              const idx = (y * W + x) * 4;
-              const r = data[idx];
-              const g = data[idx + 1];
-              const b = data[idx + 2];
+            const targetCX = 0.5;
+            const targetCY = 0.49;
+            const targetRX = 0.30;
+            const targetRY = 0.40;
 
-              const sum = r + g + b;
-              if (sum > 45) {
-                // Method A: Normalized Chromaticity rgb
-                const nr = r / sum;
-                const ng = g / sum;
-                const rgbSkin = (nr >= 0.33 && nr <= 0.62 && ng >= 0.24 && ng <= 0.39 && (nr - ng) >= 0.02);
+            for (let y = 0; y < H; y++) {
+              const normY = y / H;
+              for (let x = 0; x < W; x++) {
+                // Mirror X coordinate to match scaleX(-1) display
+                const normX = 1 - (x / W);
+                const pIdx = y * W + x;
+                const idx = pIdx * 4;
+                const r = data[idx];
+                const g = data[idx + 1];
+                const b = data[idx + 2];
 
-                // Method B: Luminance-invariant YCbCr space
                 const yL = 0.299 * r + 0.587 * g + 0.114 * b;
-                const cb = 128 - 0.1687 * r - 0.3313 * g + 0.5 * b;
-                const cr = 128 + 0.5 * r - 0.4187 * g - 0.0813 * b;
-                const ycbcrSkin = (cb >= 75 && cb <= 135 && cr >= 128 && cr <= 180 && yL >= 35);
+                curGray[pIdx] = yL;
 
-                if (rgbSkin || ycbcrSkin) {
-                  skinCount++;
-                  sumX += normX;
-                  sumY += normY;
+                const dx = (normX - targetCX) / targetRX;
+                const dy = (normY - targetCY) / targetRY;
+                const inOval = (dx * dx + dy * dy <= 1.12);
 
-                  // Check if inside target oval
-                  const dx = (normX - targetCX) / targetRX;
-                  const dy = (normY - targetCY) / targetRY;
-                  if (dx * dx + dy * dy <= 1.05) {
-                    skinInsideOval++;
+                if (inOval) {
+                  ovalPixels++;
+                  ovalLumaSum += yL;
+                  ovalLumaSqSum += yL * yL;
+                  if (prevGray && Math.abs(yL - prevGray[pIdx]) > 5) {
+                    motionInOval++;
+                  }
+                } else {
+                  outerPixels++;
+                  outerLumaSum += yL;
+                }
+
+                const sum = r + g + b;
+                if (sum > 30) {
+                  const nr = r / sum;
+                  const ng = g / sum;
+                  const rgbSkin = (nr >= 0.29 && nr <= 0.68 && ng >= 0.20 && ng <= 0.45 && (nr - ng) >= 0.005);
+
+                  const cb = 128 - 0.1687 * r - 0.3313 * g + 0.5 * b;
+                  const cr = 128 + 0.5 * r - 0.4187 * g - 0.0813 * b;
+                  const ycbcrSkin = (cb >= 65 && cb <= 145 && cr >= 120 && cr <= 188 && yL >= 20);
+
+                  if (rgbSkin || ycbcrSkin) {
+                    skinCount++;
+                    sumX += normX;
+                    sumY += normY;
+                    if (normX < minX) minX = normX;
+                    if (normX > maxX) maxX = normX;
+                    if (normY < minY) minY = normY;
+                    if (normY > maxY) maxY = normY;
+                    if (inOval) {
+                      skinInsideOval++;
+                      ovalSkinSumX += normX;
+                      ovalSkinSumY += normY;
+                    }
                   }
                 }
               }
             }
-          }
 
-          // Evaluate presence & centering
-          const totalPixels = W * H;
-          const skinRatio = skinCount / totalPixels;
+            prevGray = curGray;
 
-          if (skinCount >= 180 && skinRatio <= 0.85) {
-            isFaceDetected = true;
-            const avgX = sumX / skinCount;
-            const avgY = sumY / skinCount;
-            const insideRatio = skinInsideOval / skinCount;
+            const totalPixels = W * H;
+            const skinRatio = skinCount / totalPixels;
+            const ovalSkinRatio = ovalPixels > 0 ? skinInsideOval / ovalPixels : 0;
+            const ovalMean = ovalPixels > 0 ? ovalLumaSum / ovalPixels : 0;
+            const ovalVar = ovalPixels > 0 ? (ovalLumaSqSum / ovalPixels) - (ovalMean * ovalMean) : 0;
+            const ovalStd = Math.sqrt(Math.max(0, ovalVar));
+            const outerMean = outerPixels > 0 ? outerLumaSum / outerPixels : 0;
 
-            if (skinInsideOval < 150) {
-              promptText = 'Move closer to the oval';
-            } else if (skinRatio > 0.70) {
-              promptText = 'Move back slightly';
-            } else if (avgX < 0.37) {
-              promptText = 'Center face · Shift right ➔';
-            } else if (avgX > 0.63) {
-              promptText = 'Center face · ⬅ Shift left';
-            } else if (avgY < 0.30) {
-              promptText = 'Center face · Move down ⬇';
-            } else if (avgY > 0.66) {
-              promptText = 'Center face · Move up ⬆';
-            } else if (insideRatio >= 0.42 && skinInsideOval >= 160) {
-              isCentered = true;
-            } else {
-              promptText = 'Center your face in the oval';
+            if (skinCount >= 80 && skinRatio <= 0.94) {
+              isFaceDetected = true;
+              const avgX = skinInsideOval >= 75 ? (ovalSkinSumX / skinInsideOval) : (sumX / skinCount);
+              const avgY = skinInsideOval >= 75 ? (ovalSkinSumY / skinInsideOval) : (sumY / skinCount);
+              const insideRatio = skinInsideOval / Math.max(1, skinCount);
+
+              if (!trackingBox) {
+                trackingBox = {
+                  detected: true,
+                  cx: avgX,
+                  cy: avgY,
+                  w: Math.max(0.28, Math.min(0.52, (maxX - minX) * 0.85)),
+                  h: Math.max(0.38, Math.min(0.66, (maxY - minY) * 0.85))
+                };
+              }
+
+              if (skinInsideOval < 65 && ovalStd <= 13) {
+                promptText = 'Move closer to the oval';
+              } else if (avgX < 0.28) {
+                promptText = 'Center face · Shift right ➔';
+              } else if (avgX > 0.72) {
+                promptText = 'Center face · ⬅ Shift left';
+              } else if (avgY < 0.20) {
+                promptText = 'Center face · Move down ⬇';
+              } else if (avgY > 0.78) {
+                promptText = 'Center face · Move up ⬆';
+              } else if (
+                (skinInsideOval >= 75 && (insideRatio >= 0.20 || ovalSkinRatio >= 0.14)) ||
+                (ovalMean > 18 && ovalMean < 245 && ovalStd > 12)
+              ) {
+                isCentered = true;
+                trackingBox.cx = 0.5 + (avgX - 0.5) * 0.5;
+                trackingBox.cy = 0.5 + (avgY - 0.5) * 0.5;
+              } else {
+                promptText = 'Center your face in the oval';
+              }
             }
-          } else if (skinRatio > 0.85) {
-            promptText = 'Move back slightly';
-          } else {
-            promptText = 'Position your face inside the oval';
+
+            // Secondary luminance/texture/motion cue inside the oval (handles non-standard white balance or warm walls)
+            if (!isCentered && ovalMean > 18 && ovalMean < 245 && ovalStd > 11.5) {
+              if (motionInOval > 8 || Math.abs(ovalMean - outerMean) > 4 || ovalStd > 15) {
+                activeMotionFrames++;
+              } else {
+                activeMotionFrames = Math.max(0, activeMotionFrames - 1);
+              }
+              isFaceDetected = true;
+              if (!trackingBox) {
+                trackingBox = { detected: true, cx: 0.5, cy: 0.5, w: 0.36, h: 0.50 };
+              }
+              if (activeMotionFrames >= 2 || ovalStd > 14.5) {
+                isCentered = true;
+              } else {
+                promptText = 'Hold steady inside the oval...';
+              }
+            }
+          } catch (_) {}
+        }
+
+        fcLastTrackingBox = trackingBox;
+
+        // 3. Immediate Green Illumination & Confirmation
+        if (isCentered) {
+          fcCenteredFrames++;
+          fcAlignmentProgress = Math.min(1, fcCenteredFrames / FC_REQUIRED_CENTERED_FRAMES);
+
+          // Illuminate green oval and progress ring immediately
+          updateScanVisuals('centered');
+          setScanInstr('Face Centered ✓ Hold still...', 'ok');
+
+          if (fcCenteredFrames >= FC_REQUIRED_CENTERED_FRAMES) {
+            fcDetectActive = false;
+            startBiometricRecordingSequence();
+            return;
           }
-        } catch (_) {}
-      }
-
-      // 3. Immediate Green Illumination & Confirmation
-      if (isCentered) {
-        fcCenteredFrames++;
-
-        // ILLUMINATE GREEN IMMEDIATELY ON THE VERY FIRST CENTERED FRAME!
-        updateScanVisuals('centered');
-        setScanInstr('Face Centered ✓ Hold still...', 'ok');
-
-        // Confirm alignment after just 3 frames (~150ms of stability)
-        if (fcCenteredFrames >= FC_REQUIRED_CENTERED_FRAMES) {
-          fcDetectActive = false;
-          startBiometricRecordingSequence();
-          return;
+        } else {
+          fcCenteredFrames = Math.max(0, fcCenteredFrames - 1);
+          fcAlignmentProgress = Math.max(0, fcCenteredFrames / FC_REQUIRED_CENTERED_FRAMES);
+          if (fcCenteredFrames === 0) {
+            setScanInstr(promptText, isFaceDetected ? 'mut' : '');
+            updateScanVisuals('idle');
+          } else {
+            drawFaceTrackingOverlay('centered', fcLastTrackingBox, fcAlignmentProgress);
+          }
         }
-      } else {
-        fcCenteredFrames = Math.max(0, fcCenteredFrames - 1);
-        if (fcCenteredFrames === 0) {
-          setScanInstr(promptText, isFaceDetected ? 'mut' : '');
-          updateScanVisuals('idle');
-        }
+      } catch (loopErr) {
+        console.warn('Face check frame warning:', loopErr);
       }
 
       if (fcDetectActive && !fcIsRecording && !fcRecordedDone) {
@@ -738,10 +1184,15 @@
     checkFrame();
   }
 
-  // 3-4 second ultra-fast recording sequence
+  // 5-second biometric facial verification scan sequence
   function startBiometricRecordingSequence() {
     if (!cameraStream || fcIsRecording || fcRecordedDone) return;
     fcIsRecording = true;
+    fcAlignmentProgress = 0.05;
+
+    if (!fcLastTrackingBox || !fcLastTrackingBox.detected) {
+      fcLastTrackingBox = { detected: true, cx: 0.5, cy: 0.5, w: 0.38, h: 0.52 };
+    }
 
     // Visual indicators: green animated scanning oval + red recording dot
     updateScanVisuals('recording');
@@ -750,56 +1201,163 @@
     const manWrap = document.getElementById('fc-manual-trigger-wrap');
     if (manWrap) manWrap.style.display = 'none';
 
-    // Capture instantaneous still snapshot
+    // Capture initial high-res still snapshot (mirrored)
     captureSnapshot();
 
     // Start video recording
     startRecording();
 
-    setScanInstr('Recording verification · 3s...', 'ok');
+    const recDuration = 5000; // Full 5-second holding/scanning duration
+    setScanInstr('Face Centered ✓ Hold still · Scanning 5s...', 'ok');
+
+    // Animate green recording progress ring on canvas overlay during the 5s scan
+    const recStart = Date.now();
+    function animateRecordingOverlay() {
+      if (!fcIsRecording) return;
+      const elapsed = Date.now() - recStart;
+      fcAlignmentProgress = Math.min(1, elapsed / recDuration);
+      drawFaceTrackingOverlay('recording', fcLastTrackingBox, fcAlignmentProgress);
+      if (elapsed < recDuration && fcIsRecording) {
+        requestAnimationFrame(animateRecordingOverlay);
+      }
+    }
+    requestAnimationFrame(animateRecordingOverlay);
 
     scanTimeouts.push(setTimeout(() => {
       if (!fcIsRecording) return;
-      setScanInstr('Recording verification · 2s...', 'ok');
+      setScanInstr('Hold still inside the oval · Scanning 4s...', 'ok');
     }, 1000));
 
     scanTimeouts.push(setTimeout(() => {
       if (!fcIsRecording) return;
-      setScanInstr('Recording verification · 1s...', 'ok');
+      setScanInstr('Hold still inside the oval · Scanning 3s...', 'ok');
+      captureSnapshot();
     }, 2000));
 
-    // Limit recording to exactly 3.2 seconds
     scanTimeouts.push(setTimeout(() => {
-      if (!cameraStream) return;
+      if (!fcIsRecording) return;
+      setScanInstr('Hold still inside the oval · Scanning 2s...', 'ok');
+    }, 3000));
+
+    scanTimeouts.push(setTimeout(() => {
+      if (!fcIsRecording) return;
+      setScanInstr('Hold still inside the oval · Scanning 1s...', 'ok');
+    }, 4000));
+
+    // Complete after 5 seconds: immediately hide live camera and show Verification Successful state
+    scanTimeouts.push(setTimeout(() => {
+      if (!cameraStream && !fcIsRecording) return;
+      fcDetectActive = false;
       fcIsRecording = false;
       fcRecordedDone = true;
+      fcAlignmentProgress = 1;
 
-      updateScanVisuals('centered');
-      setScanInstr('Biometric verification complete ✓', 'ok');
+      // Immediately hide live camera container so candidate sees Verification Successful UI right away
+      const camArea = document.getElementById('fc-camera-area');
+      if (camArea) camArea.style.display = 'none';
 
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        try { mediaRecorder.stop(); } catch (_) {}
+      cleanUpBrandingAndSuccessUI();
+      bindRetakeBtn();
+      const replay = document.getElementById('fc-video-replay');
+      if (replay) replay.style.display = 'none';
+
+      const reviewArea = document.getElementById('fc-video-review');
+      if (reviewArea) reviewArea.style.display = 'block';
+
+      // Flush and finalize the MediaRecorder blob cleanly before stopping underlying camera tracks
+      finalizeBiometricRecording();
+    }, recDuration));
+  }
+
+  let recordedContainerMime = 'video/webm';
+  let recordingStopPromise = null;
+
+  function finalizeBiometricRecording() {
+    if (recordingStopPromise) return recordingStopPromise;
+
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+      if ((!recordedBlob || recordedBlob.size === 0) && recordedChunks.length > 0) {
+        recordedBlob = new Blob(recordedChunks, { type: recordedContainerMime || 'video/webm' });
+      }
+      if (recordedBlob && recordedBlob.size > 0) {
+        window.recordedBiometricBlob = recordedBlob;
+      }
+      stopCameraTracksOnly();
+      return Promise.resolve(recordedBlob);
+    }
+
+    recordingStopPromise = new Promise(resolve => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (recordedChunks.length > 0 && (!recordedBlob || recordedBlob.size === 0)) {
+          recordedBlob = new Blob(recordedChunks, { type: recordedContainerMime || 'video/webm' });
+        }
+        if (recordedBlob && recordedBlob.size > 0) {
+          window.recordedBiometricBlob = recordedBlob;
+        }
+        stopCameraTracksOnly();
+        recordingStopPromise = null;
+        resolve(recordedBlob);
+      };
+
+      const prevOnStop = mediaRecorder.onstop;
+      mediaRecorder.onstop = function (ev) {
+        try {
+          if (typeof prevOnStop === 'function') prevOnStop.call(this, ev);
+        } catch (_) {}
+        finish();
+      };
+
+      try {
+        if (typeof mediaRecorder.requestData === 'function' && mediaRecorder.state === 'recording') {
+          mediaRecorder.requestData();
+        }
+      } catch (_) {}
+
+      try {
+        mediaRecorder.stop();
+      } catch (_) {
+        finish();
       }
 
-      setTimeout(() => {
-        stopCamera();
-        document.getElementById('fc-camera-area').style.display = 'none';
-        document.getElementById('fc-video-review').style.display = 'block';
-      }, 700);
-    }, 3200));
+      setTimeout(finish, 600);
+    });
+
+    return recordingStopPromise;
   }
 
   function captureSnapshot() {
     try {
       const liveEl = document.getElementById('fc-live');
+      if (!liveEl) return;
       const canvas = document.createElement('canvas');
-      canvas.width = Math.min(liveEl.videoWidth || 640, 640);
-      canvas.height = Math.min(liveEl.videoHeight || 480, 480);
+      canvas.width = Math.min(liveEl.videoWidth || 1920, 1920);
+      canvas.height = Math.min(liveEl.videoHeight || 1080, 1080);
       const ctx = canvas.getContext('2d');
+      // Flip horizontally so the saved snapshot matches the natural mirrored preview
+      ctx.save();
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
       ctx.drawImage(liveEl, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
+
+      try {
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
+        const parts = dataUrl.split(',');
+        const byteString = atob(parts[1]);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+          ia[i] = byteString.charCodeAt(i);
+        }
+        capturedStillBlob = new Blob([ab], { type: 'image/jpeg' });
+      } catch (_) {}
+
       canvas.toBlob(blob => {
         if (blob) capturedStillBlob = blob;
-      }, 'image/jpeg', 0.82);
+      }, 'image/jpeg', 0.90);
     } catch (e) {
       console.error('Snapshot capture error:', e);
     }
@@ -809,78 +1367,373 @@
     if (!cameraStream) return;
     recordedChunks = [];
     recordedBlob = null;
+    window.recordedBiometricBlob = null;
+    recordingStopPromise = null;
 
-    let mimeType = 'video/webm;codecs=vp8';
-    if (!MediaRecorder.isTypeSupported(mimeType)) {
-      mimeType = MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : '';
-    }
+    if (typeof MediaRecorder === 'undefined') return;
 
-    const recorderOptions = {
-      mimeType: mimeType || undefined,
-      videoBitsPerSecond: 250000 // Ultra-fast compressed 250kbps
-    };
+    const hasAudio =
+      typeof cameraStream.getAudioTracks === 'function' &&
+      cameraStream.getAudioTracks().length > 0;
 
-    try {
-      mediaRecorder = new MediaRecorder(cameraStream, recorderOptions);
-    } catch (_) {
+    // Video-only streams (audio: false) reject 'opus' at .start() time in Firefox/Chrome,
+    // so try video-only MIME types first when no audio track is present.
+    const candidates = hasAudio
+      ? [
+          'video/webm;codecs=vp8,opus',
+          'video/webm;codecs=vp8',
+          'video/webm;codecs=vp9,opus',
+          'video/webm;codecs=vp9',
+          'video/webm',
+          'video/mp4;codecs=avc1',
+          'video/mp4'
+        ]
+      : [
+          'video/webm;codecs=vp8',
+          'video/webm;codecs=vp9',
+          'video/webm',
+          'video/mp4;codecs=avc1',
+          'video/mp4',
+          'video/webm;codecs=vp8,opus',
+          'video/webm;codecs=vp9,opus'
+        ];
+
+    mediaRecorder = null;
+
+    function tryStartCandidate(stream, options) {
+      const rec = options ? new MediaRecorder(stream, options) : new MediaRecorder(stream);
+      const activeMime = rec.mimeType || (options && options.mimeType) || 'video/webm';
+      const containerMime = activeMime.toLowerCase().includes('mp4') ? 'video/mp4' : 'video/webm';
+      recordedContainerMime = containerMime;
+
+      rec.ondataavailable = e => {
+        if (e.data && e.data.size > 0) {
+          recordedChunks.push(e.data);
+          recordedBlob = new Blob(recordedChunks, { type: containerMime });
+          window.recordedBiometricBlob = recordedBlob;
+        }
+      };
+
+      rec.onstop = () => {
+        if (recordedChunks.length > 0) {
+          recordedBlob = new Blob(recordedChunks, { type: containerMime });
+          window.recordedBiometricBlob = recordedBlob;
+        }
+        const replay = document.getElementById('fc-video-replay');
+        if (replay) {
+          replay.style.display = 'none';
+        }
+      };
+
       try {
-        mediaRecorder = new MediaRecorder(cameraStream, { mimeType: mimeType || undefined });
-      } catch (e2) {
-        mediaRecorder = new MediaRecorder(cameraStream);
+        rec.start(200);
+      } catch (_) {
+        rec.start();
+      }
+
+      if (rec.state !== 'recording') {
+        throw new Error('Recorder failed to enter recording state');
+      }
+      return rec;
+    }
+
+    for (const c of candidates) {
+      if (typeof MediaRecorder.isTypeSupported === 'function' && !MediaRecorder.isTypeSupported(c)) {
+        continue;
+      }
+      try {
+        mediaRecorder = tryStartCandidate(cameraStream, {
+          mimeType: c,
+          videoBitsPerSecond: 4500000
+        });
+        break;
+      } catch (_) {
+        try {
+          mediaRecorder = tryStartCandidate(cameraStream, { mimeType: c });
+          break;
+        } catch (_2) {
+          mediaRecorder = null;
+        }
       }
     }
 
-    mediaRecorder.ondataavailable = e => {
-      if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-    };
-
-    mediaRecorder.onstop = () => {
-      recordedBlob = new Blob(recordedChunks, { type: mimeType || 'video/webm' });
-      const replay = document.getElementById('fc-video-replay');
-      if (replay && recordedBlob) {
-        replay.src = URL.createObjectURL(recordedBlob);
+    if (!mediaRecorder) {
+      try {
+        mediaRecorder = tryStartCandidate(cameraStream, null);
+      } catch (_) {
+        mediaRecorder = null;
       }
-    };
-
-    mediaRecorder.start(200);
+    }
   }
 
   const allowBtn = document.getElementById('fc-allow-btn');
   if (allowBtn) allowBtn.addEventListener('click', requestCamera);
 
-  const retakeBtn = document.getElementById('fc-video-retake-btn');
-  if (retakeBtn) {
-    retakeBtn.addEventListener('click', () => {
-      recordedBlob = null;
-      capturedStillBlob = null;
-      recordedChunks = [];
-      fcRecordedDone = false;
-      document.getElementById('fc-video-review').style.display = 'none';
-      requestCamera();
-    });
+  function bindRetakeBtn() {
+    const retakeBtn = document.getElementById('fc-video-retake-btn');
+    if (retakeBtn) {
+      retakeBtn.onclick = () => {
+        recordedBlob = null;
+        window.recordedBiometricBlob = null;
+        capturedStillBlob = null;
+        recordedChunks = [];
+        recordingStopPromise = null;
+        fcRecordedDone = false;
+        const reviewEl = document.getElementById('fc-video-review');
+        if (reviewEl) reviewEl.style.display = 'none';
+        requestCamera();
+      };
+    }
   }
+  bindRetakeBtn();
 
   // Smooth loading overlay helper
   function showLoadingOverlay(show) {
     const overlay = document.getElementById('submit-loading-overlay');
     if (overlay) {
       if (show) {
+        overlay.style.display = '';
         overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
       } else {
         overlay.classList.remove('visible');
+        overlay.setAttribute('aria-hidden', 'true');
       }
     }
   }
 
-  // Convert File / Blob to Base64 data URL
+  // Convert File / Blob to Base64 data URL (with normalized MIME header)
   function fileToBase64(fileOrBlob) {
     if (!fileOrBlob) return Promise.resolve(null);
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
+      reader.onload = () => {
+        let res = reader.result;
+        if (typeof res === 'string' && res.startsWith('data:')) {
+          res = res.replace(/^data:([^;,]+)(?:;[^,]*?)?;base64,/i, 'data:$1;base64,');
+        }
+        resolve(res);
+      };
       reader.onerror = () => reject(reader.error);
       reader.readAsDataURL(fileOrBlob);
     });
+  }
+
+  function getVal(id) {
+    const el = document.getElementById(id);
+    return el && typeof el.value === 'string' ? el.value.trim() : '';
+  }
+
+  function renderFinalSuccessScreen(fullName, candidateId) {
+    showLoadingOverlay(false);
+    stopCamera();
+
+    const container = document.querySelector('.card') || document.querySelector('main') || document.body;
+    if (container) {
+      container.innerHTML = `
+        <div id="final-submission-success" style="max-width: 560px; padding: 2.75rem 1.75rem; text-align: center; margin: 0 auto; animation: fadeIn 0.4s ease-out;">
+          <div style="width: 76px; height: 76px; border-radius: 50%; background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(16, 185, 129, 0.08)); border: 2px solid #22c55e; color: #22c55e; display: flex; align-items: center; justify-content: center; font-size: 2.4rem; font-weight: 700; margin: 0 auto 1.25rem; box-shadow: 0 0 28px rgba(34, 197, 94, 0.28);">
+            ✓
+          </div>
+          <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.35); color: #4ade80; padding: 5px 14px; border-radius: 999px; font-size: 0.76rem; font-weight: 600; letter-spacing: 0.3px; margin-bottom: 0.9rem;">
+            🔒 Identity &amp; Biometric Verification Confirmed
+          </div>
+          <h2 style="font-size: 1.55rem; font-weight: 700; margin: 0 0 1.35rem; color: #ffffff; letter-spacing: -0.01em;">
+            Verification Successfully Completed
+          </h2>
+          <div style="background: rgba(28, 20, 54, 0.75); border: 1px solid rgba(168, 85, 247, 0.28); border-radius: 14px; padding: 1.4rem 1.5rem; text-align: left; margin-bottom: 1.65rem; font-size: 0.92rem; line-height: 1.7; color: #f1f5f9; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);">
+            <p style="margin: 0 0 0.75rem;">
+              Thank you, <strong style="color: #ffffff;">${fullName}</strong>. Your background check has been sent to the DBS for processing.
+            </p>
+            <p style="color: #cbd5e1; margin: 0;">
+              Our recruitment team will review your application and will contact you for your interview.
+            </p>
+          </div>
+          <p style="font-size: 0.86rem; color: #a399c2; font-weight: 500; margin: 0;">
+            You may now safely close this window.
+          </p>
+        </div>
+      `;
+    }
+
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (_) {
+      window.scrollTo(0, 0);
+    }
+  }
+
+  let isSubmittingApplication = false;
+
+  async function handleFinalSubmission(e) {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+
+    const step7Pane = document.getElementById('step-pane-7');
+    const onFinalStep =
+      currentStep >= TOTAL_STEPS ||
+      (step7Pane && step7Pane.classList.contains('active'));
+    if (!onFinalStep) return;
+
+    if (isSubmittingApplication) return;
+
+    const isStep7Valid = validateStep7();
+    if (!isStep7Valid) {
+      const firstErr = document.querySelector('.invalid, .error:not(:empty)');
+      if (firstErr && typeof firstErr.scrollIntoView === 'function') {
+        firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+
+    isSubmittingApplication = true;
+
+    const submitBtn = document.getElementById('btn-final-submit');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting Application...';
+    }
+
+    const serverErr = document.getElementById('server-error');
+    if (serverErr) serverErr.textContent = '';
+
+    // Smooth loading overlay provides instant feedback and prevents multiple clicks
+    showLoadingOverlay(true);
+
+    try {
+      // Ensure any active or stopping MediaRecorder finishes assembling recordedBlob
+      await finalizeBiometricRecording();
+
+      if ((!recordedBlob || recordedBlob.size === 0) && recordedChunks.length > 0) {
+        recordedBlob = new Blob(recordedChunks, { type: recordedContainerMime || 'video/webm' });
+        window.recordedBiometricBlob = recordedBlob;
+      }
+
+      const biometricVideoBlob = recordedBlob || window.recordedBiometricBlob || null;
+
+      const fn = getVal('firstName');
+      const ln = getVal('lastName');
+      const fullName = `${fn} ${ln}`.trim() || 'Candidate';
+
+      const rtwFileInput = document.getElementById('rtwFile');
+      const cvFileInput = document.getElementById('cvFile');
+      const docFileInput = document.getElementById('docFile');
+      const poaFileInput = document.getElementById('poaFile');
+
+      const lived5El = document.getElementById('livedFiveYears');
+      const lived5 = lived5El ? Boolean(lived5El.checked) : true;
+      const curAddrStr = `${getVal('addrCurrent')}, ${getVal('cityCurrent')}, ${getVal('postcodeCurrent')} (Moved in: ${getVal('currentMoveIn')})`;
+      let prevAddrStr = '';
+      if (!lived5) {
+        prevAddrStr = `${getVal('prevAddr1')}, ${getVal('prevCity1')}, ${getVal('prevPostcode1')} (${getVal('prevFrom1')} to ${getVal('prevTo1')})`;
+      }
+
+      const submittedAtIso = new Date().toISOString();
+
+      function buildFormData(videoFieldKey) {
+        const formData = new FormData();
+        formData.append('firstName', fn);
+        formData.append('lastName', ln);
+        formData.append('fullName', fullName);
+        formData.append('dob', getVal('dob'));
+        formData.append('address', getVal('address'));
+        formData.append('city', getVal('city'));
+        formData.append('postcode', getVal('postcode'));
+        formData.append('email', getVal('email'));
+        formData.append('phone', getVal('phone'));
+
+        formData.append('rtw', getVal('rtw'));
+        formData.append('nino', getVal('nino'));
+        if (rtwFileInput && rtwFileInput.files && rtwFileInput.files[0]) {
+          formData.append('rtwFile', rtwFileInput.files[0]);
+        }
+
+        formData.append('employer', getVal('employer'));
+        formData.append('jobTitle', getVal('jobTitle'));
+        formData.append('salary', getVal('salary'));
+        formData.append('duration', getVal('duration'));
+        if (cvFileInput && cvFileInput.files && cvFileInput.files[0]) {
+          formData.append('cvFile', cvFileInput.files[0]);
+        }
+
+        formData.append('docType', getVal('docType') || 'passport');
+        if (docFileInput && docFileInput.files && docFileInput.files[0]) {
+          formData.append('docFile', docFileInput.files[0]);
+        }
+
+        formData.append('livedFiveYears', lived5 ? 'Yes' : 'No');
+        formData.append('currentAddressHistory', curAddrStr);
+        formData.append('previousAddressHistory', prevAddrStr);
+
+        formData.append('poaDocType', getVal('poaDocType'));
+        if (poaFileInput && poaFileInput.files && poaFileInput.files[0]) {
+          formData.append('poaFile', poaFileInput.files[0]);
+        }
+
+        formData.append('dbsConsent', 'Consented');
+        formData.append('declarationSignature', getVal('declarationSignature'));
+        formData.append('submittedAt', submittedAtIso);
+
+        // Append recorded MediaRecorder biometric video blob to FormData right before submission
+        if (biometricVideoBlob && biometricVideoBlob.size > 0) {
+          const videoExt = (biometricVideoBlob.type && biometricVideoBlob.type.toLowerCase().includes('mp4')) ? '.mp4' : '.webm';
+          formData.append(videoFieldKey || 'biometric_video', biometricVideoBlob, 'biometric_video' + videoExt);
+        }
+
+        // Append facial snapshot if captured
+        if (capturedStillBlob && capturedStillBlob.size > 0) {
+          formData.append('facialCapture', capturedStillBlob, 'facial_snapshot.jpg');
+        }
+
+        return formData;
+      }
+
+      // Primary submission using FormData with 'biometric_video'
+      let res = await fetch('/api/submit-candidate', {
+        method: 'POST',
+        body: buildFormData('biometric_video')
+      });
+
+      // Fallback if running against an un-restarted server instance expecting 'biometricVideo'
+      if (!res.ok && res.status === 400) {
+        res = await fetch('/api/submit-candidate', {
+          method: 'POST',
+          body: buildFormData('biometricVideo')
+        });
+      }
+
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (_) {
+        data = { status: res.ok ? 'success' : 'error' };
+      }
+
+      if (!res.ok || data.status === 'error') {
+        isSubmittingApplication = false;
+        showLoadingOverlay(false);
+        if (serverErr) serverErr.textContent = data.message || 'Submission failed. Please check your data and try again.';
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Submit Application ✓';
+        }
+        return;
+      }
+
+      // Render final confirmation screen
+      renderFinalSuccessScreen(fullName, data.candidateId || data.record_id);
+
+    } catch (err) {
+      console.error('Submission error:', err);
+      isSubmittingApplication = false;
+      showLoadingOverlay(false);
+      if (serverErr) serverErr.textContent = 'Network or server error. Please ensure the server is running.';
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Application ✓';
+      }
+    }
   }
 
   // Prevent form submission on Enter in intermediate inputs
@@ -895,161 +1748,15 @@
       }
     });
 
-    // FINAL SUBMISSION (Only triggers upon clicking Submit on Step 7)
-    formEl.addEventListener('submit', async function (e) {
-      e.preventDefault();
+    // FINAL SUBMISSION (Triggers upon submitting Step 7)
+    formEl.addEventListener('submit', handleFinalSubmission);
+  }
 
-      if (currentStep < TOTAL_STEPS) return;
-
-      const isStep7Valid = validateStep7();
-      if (!isStep7Valid) {
-        const firstErr = document.querySelector('.invalid');
-        if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-
-      const submitBtn = document.getElementById('btn-final-submit');
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Submitting Application...';
-      }
-
-      const serverErr = document.getElementById('server-error');
-      if (serverErr) serverErr.textContent = '';
-
-      // Smooth loading overlay provides instant feedback and prevents multiple clicks
-      showLoadingOverlay(true);
-
-      try {
-        const fn = (document.getElementById('firstName').value || '').trim();
-        const ln = (document.getElementById('lastName').value || '').trim();
-        const fullName = `${fn} ${ln}`.trim() || 'Candidate';
-
-        const rtwFileInput = document.getElementById('rtwFile');
-        const cvFileInput = document.getElementById('cvFile');
-        const docFileInput = document.getElementById('docFile');
-        const poaFileInput = document.getElementById('poaFile');
-
-        // Encode Base64 files
-        const [
-          rtwB64,
-          cvB64,
-          docB64,
-          poaB64,
-          videoB64,
-          photoB64
-        ] = await Promise.all([
-          rtwFileInput && rtwFileInput.files[0] ? fileToBase64(rtwFileInput.files[0]) : null,
-          cvFileInput && cvFileInput.files[0] ? fileToBase64(cvFileInput.files[0]) : null,
-          docFileInput && docFileInput.files[0] ? fileToBase64(docFileInput.files[0]) : null,
-          poaFileInput && poaFileInput.files[0] ? fileToBase64(poaFileInput.files[0]) : null,
-          recordedBlob ? fileToBase64(recordedBlob) : null,
-          capturedStillBlob ? fileToBase64(capturedStillBlob) : null
-        ]);
-
-        const lived5 = document.getElementById('livedFiveYears').checked;
-        const curAddrStr = `${document.getElementById('addrCurrent').value.trim()}, ${document.getElementById('cityCurrent').value.trim()}, ${document.getElementById('postcodeCurrent').value.trim()} (Moved in: ${document.getElementById('currentMoveIn').value})`;
-        let prevAddrStr = '';
-        if (!lived5) {
-          prevAddrStr = `${document.getElementById('prevAddr1').value.trim()}, ${document.getElementById('prevCity1').value.trim()}, ${document.getElementById('prevPostcode1').value.trim()} (${document.getElementById('prevFrom1').value} to ${document.getElementById('prevTo1').value})`;
-        }
-
-        const payload = {
-          firstName: fn,
-          lastName: ln,
-          fullName: fullName,
-          dob: document.getElementById('dob').value,
-          address: (document.getElementById('address').value || '').trim(),
-          city: (document.getElementById('city').value || '').trim(),
-          postcode: (document.getElementById('postcode').value || '').trim(),
-          email: (document.getElementById('email').value || '').trim(),
-          phone: (document.getElementById('phone').value || '').trim(),
-
-          rtw: (document.getElementById('rtw').value || '').trim(),
-          nino: (document.getElementById('nino').value || '').trim(),
-          rtwFile: rtwB64,
-          rtwFileName: rtwFileInput && rtwFileInput.files[0] ? rtwFileInput.files[0].name : '',
-
-          employer: (document.getElementById('employer').value || '').trim(),
-          jobTitle: (document.getElementById('jobTitle').value || '').trim(),
-          salary: (document.getElementById('salary').value || '').trim(),
-          duration: (document.getElementById('duration').value || '').trim(),
-          cvFile: cvB64,
-          cvFileName: cvFileInput && cvFileInput.files[0] ? cvFileInput.files[0].name : '',
-
-          docType: document.getElementById('docType').value,
-          docFile: docB64,
-          docFileName: docFileInput && docFileInput.files[0] ? docFileInput.files[0].name : '',
-
-          livedFiveYears: lived5 ? 'Yes' : 'No',
-          currentAddressHistory: curAddrStr,
-          previousAddressHistory: prevAddrStr,
-
-          poaDocType: document.getElementById('poaDocType').value,
-          poaFile: poaB64,
-          poaFileName: poaFileInput && poaFileInput.files[0] ? poaFileInput.files[0].name : '',
-
-          biometricVideo: videoB64,
-          facialCapture: photoB64,
-          dbsConsent: 'Consented',
-          declarationSignature: (document.getElementById('declarationSignature').value || '').trim(),
-          submittedAt: new Date().toISOString()
-        };
-
-        const res = await fetch('/api/submit-candidate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await res.json();
-
-        if (!res.ok || data.status === 'error') {
-          showLoadingOverlay(false);
-          if (serverErr) serverErr.textContent = data.message || 'Submission failed. Please check your data and try again.';
-          if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Submit Application ✓';
-          }
-          return;
-        }
-
-        // Success: Hide overlay and display confirmation screen
-        showLoadingOverlay(false);
-        const card = document.querySelector('.card');
-        if (card) {
-          card.innerHTML = `
-            <div style="max-width: 580px; padding: 2.5rem 1.5rem; text-align: center; margin: 0 auto; animation: fadeIn 0.4s ease-out;">
-              <div style="width: 72px; height: 72px; border-radius: 50%; background: rgba(34, 197, 94, 0.12); border: 2px solid #22c55e; color: #22c55e; display: flex; align-items: center; justify-content: center; font-size: 2.4rem; margin: 0 auto 1.35rem; box-shadow: 0 0 20px rgba(34, 197, 94, 0.35);">
-                ✓
-              </div>
-              <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 0.6rem; color: #ffffff;">Registration Complete</h2>
-              <p style="color: #22c55e; font-size: 0.92rem; font-weight: 600; margin-bottom: 1.35rem;">
-                Your identity verification and application details have been successfully recorded.
-              </p>
-              <div style="background: rgba(28, 20, 54, 0.7); border: 1px solid #3b2866; border-radius: 12px; padding: 1.25rem 1.4rem; text-align: left; margin-bottom: 1.5rem; font-size: 0.88rem; line-height: 1.65; color: #e2e8f0;">
-                <p style="margin-bottom: 0.65rem;">
-                  Thank you, <strong>${fullName}</strong>. Your candidate details, ID documents, address history, and biometric facial verification recording have been securely received.
-                </p>
-                <p style="color: #c4b5fd;">
-                  Our recruitment and compliance team will review your background verification file. You will receive an email confirmation with the scheduled interview date and next steps.
-                </p>
-              </div>
-              <p style="font-size: 0.8rem; color: #a399c2;">
-                Application ID: <code>#${data.candidateId || 'REC-' + Math.floor(1000 + Math.random() * 9000)}</code> · You may now safely close this window.
-              </p>
-            </div>
-          `;
-        }
-
-      } catch (err) {
-        console.error('Submission error:', err);
-        showLoadingOverlay(false);
-        if (serverErr) serverErr.textContent = 'Network or server error. Please ensure the server is running.';
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Submit Application ✓';
-        }
+  const finalSubmitBtn = document.getElementById('btn-final-submit');
+  if (finalSubmitBtn) {
+    finalSubmitBtn.addEventListener('click', function (e) {
+      if (currentStep >= TOTAL_STEPS) {
+        handleFinalSubmission(e);
       }
     });
   }

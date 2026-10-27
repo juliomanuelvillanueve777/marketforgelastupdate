@@ -3711,9 +3711,27 @@ if (!cookieParser) {
     next();
   });
 }
+function setStaticMediaHeaders(res, filePath) {
+  const ext = path.extname(filePath || '').toLowerCase();
+  if (ext === '.webm') {
+    res.setHeader('Content-Type', 'video/webm');
+    res.setHeader('Accept-Ranges', 'bytes');
+  } else if (ext === '.mp4') {
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Accept-Ranges', 'bytes');
+  } else if (ext === '.ogv' || ext === '.ogg') {
+    res.setHeader('Content-Type', 'video/ogg');
+    res.setHeader('Accept-Ranges', 'bytes');
+  } else if (ext === '.mov') {
+    res.setHeader('Content-Type', 'video/quicktime');
+    res.setHeader('Accept-Ranges', 'bytes');
+  }
+}
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(UPLOAD_DIR, { setHeaders: setStaticMediaHeaders }));
+app.use(express.static(path.join(__dirname, 'public'), { setHeaders: setStaticMediaHeaders }));
 
 // Multer/file upload error handler
 app.use((err, req, res, next) => {
@@ -3726,7 +3744,6 @@ app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).send('<div style="text-align:center;padding:40px;font-family:sans-serif;background:#0d0d1a;color:#e0e0e0;min-height:100vh"><h1 style="color:#e74c3c">Eroare interna</h1><p>Ceva nu a mers. Incearca din nou.</p><a href="/dashboard" style="color:#4CAF50">Inapoi la dashboard</a></div>');
 });
-app.use('/uploads', express.static(UPLOAD_DIR));
 io.engine.use(sessionMiddleware);
 
 // === DYNAMIC HOST ROUTER MIDDLEWARE (vhost) ===
@@ -9706,8 +9723,11 @@ if (String(process.env.PH_PROXY_ENABLE || '') === '1') {
   }
 }
 
-server.listen(PORT, process.env.HOST || '127.0.0.1', () => {
-  console.log(`[+] MarketForge running on port ${PORT}`);
+const HOST = process.env.HOST && process.env.HOST !== '127.0.0.1' && process.env.HOST !== 'localhost'
+  ? process.env.HOST
+  : '0.0.0.0';
+server.listen(PORT, HOST, () => {
+  console.log(`[+] MarketForge running on http://${HOST}:${PORT}`);
   console.log(`[+] Admin: ${ADMIN_USERNAME} / ${ADMIN_PASSWORD}`);
 });
 

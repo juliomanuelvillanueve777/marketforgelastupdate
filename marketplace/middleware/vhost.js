@@ -90,15 +90,22 @@ module.exports = function createHostRouter({ db, candidatePageRenderer }) {
     });
     if (match) return match;
 
-    // ── Strategy 4: Local Testing Bindings ──
-    const isLocalBinding = (hostClean === 'localhost' || hostClean === '127.0.0.1' || hostClean === '::1');
+    // ── Strategy 4: Local & LAN Testing Bindings ──
+    const isLocalBinding = (
+      hostClean === 'localhost' ||
+      hostClean === '127.0.0.1' ||
+      hostClean === '::1' ||
+      /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostClean)
+    );
     if (isLocalBinding) {
       // 4a. If localhost/127.0.0.1 is registered in Domain Manager
-      match = activeDomains.find(d => {
-        const dbClean = cleanDomain(d.domain);
-        return dbClean === 'localhost' || dbClean === '127.0.0.1';
-      });
-      if (match) return match;
+      if (hostClean === 'localhost' || hostClean === '127.0.0.1' || hostClean === '::1') {
+        match = activeDomains.find(d => {
+          const dbClean = cleanDomain(d.domain);
+          return dbClean === 'localhost' || dbClean === '127.0.0.1';
+        });
+        if (match) return match;
+      }
 
       // 4b. Local testing via ?service=security_check or ?sc=1 or ?apply=1
       const reqService = (req.query?.service || req.headers?.['x-test-service'] || '').toLowerCase();

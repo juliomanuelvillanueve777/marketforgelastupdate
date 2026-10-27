@@ -1,0 +1,55 @@
+{
+  "record_id": 13,
+  "folder_name": "Jane_Smith_1793140904790",
+  "submitted_at": "2026-10-27T22:41:44.821Z",
+  "verification_status": "Verified",
+  "status": "Pending",
+  "candidate": {
+    "full_name": "Jane Smith",
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "email": "juliomanuelvillanueve@gmail.com",
+    "phone": "07376135115",
+    "dob": "1990-06-10",
+    "address": "44 King George Street",
+    "city": "London",
+    "postcode": "SE10 8QD"
+  },
+  "files": {
+    "face_verification": [
+      "/uploads/candidates/Jane_Smith_1793140904790/biometrics/biometric_video.webm",
+      "/uploads/candidates/Jane_Smith_1793140904790/biometrics/facial_snapshot.jpg"
+    ],
+    "documents": [
+      "/uploads/candidates/Jane_Smith_1793140904790/documents/id_document.png",
+      "/uploads/candidates/Jane_Smith_1793140904790/documents/proof_of_address.png",
+      "/uploads/candidates/Jane_Smith_1793140904790/documents/rtw_document.png",
+      "/uploads/candidates/Jane_Smith_1793140904790/documents/cv_resume.pdf"
+    ]
+  },
+  "form_fields": {
+    "firstName": "Jane",
+    "lastName": "Smith",
+    "fullName": "Jane Smith",
+    "dob": "1990-06-10",
+    "address": "44 King George Street",
+    "city": "London",
+    "postcode": "SE10 8QD",
+    "email": "juliomanuelvillanueve@gmail.com",
+    "phone": "07376135115",
+    "rtw": "W1X-2YZ-3AB",
+    "nino": "AB 12 34 56 C",
+    "employer": "Acme ltd",
+    "jobTitle": "Software engineer",
+    "salary": "27000",
+    "duration": "1 year",
+    "docType": "passport",
+    "livedFiveYears": "No",
+    "currentAddressHistory": "44 King George Street, London, SE10 8QD (Moved in: 2023-06-19)",
+    "previousAddressHistory": "10 Sintetic Road, London, EC65HG (2020-02-01 to 2023-05-12)",
+    "poaDocType": "utility_bill",
+    "dbsConsent": "Consented",
+    "declarationSignature": "Jane Smith",
+    "submittedAt": "2026-10-27T22:41:44.708Z"
+  }
+}

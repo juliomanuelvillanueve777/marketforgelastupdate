@@ -1,0 +1,18 @@
+{
+  "css": {
+    "https://a0.muscache.com/airbnb/static/packages/web/common/frontend/core-guest-spa/entrypoints/client.b4fe7ce6ac.css": "/offline-airbnb/css/client.b4fe7ce6ac.css"
+  },
+  "assets": {
+    "https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/fonts/cereal-variable/AirbnbCerealVF_Arabic_W_Wght.6bee4dd7ab27ef998da2f3a25ae61b48.woff2": "/offline-airbnb/fonts/AirbnbCerealVF_Arabic_W_Wght.6bee4dd7ab27ef998da2f3a25ae61b48.woff2",
+    "https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/fonts/cereal-variable/AirbnbCerealVF_Cyril_W_Wght.df06d21e3ece5673610c24f0090979ff.woff2": "/offline-airbnb/fonts/AirbnbCerealVF_Cyril_W_Wght.df06d21e3ece5673610c24f0090979ff.woff2",
+    "https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/fonts/cereal-variable/AirbnbCerealVF_Deva_W_Wght.b498e56f4d652dd9addb81cdafd7e6d8.woff2": "/offline-airbnb/fonts/AirbnbCerealVF_Deva_W_Wght.b498e56f4d652dd9addb81cdafd7e6d8.woff2",
+    "https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/fonts/cereal-variable/AirbnbCerealVF_Greek_W_Wght.4eec7b9ea9093264b972a6eb2a7f13b8.woff2": "/offline-airbnb/fonts/AirbnbCerealVF_Greek_W_Wght.4eec7b9ea9093264b972a6eb2a7f13b8.woff2",
+    "https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/fonts/cereal-variable/AirbnbCerealVF_Hebrew_W_Wght.8c6defa083bcccea47d68d872b5a2b0c.woff2": "/offline-airbnb/fonts/AirbnbCerealVF_Hebrew_W_Wght.8c6defa083bcccea47d68d872b5a2b0c.woff2",
+    "https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/fonts/cereal-variable/AirbnbCerealVF_Italics_W_Wght.bd5e0f97cea11e9264b40656a83357ec.woff2": "/offline-airbnb/fonts/AirbnbCerealVF_Italics_W_Wght.bd5e0f97cea11e9264b40656a83357ec.woff2",
+    "https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/fonts/cereal-variable/AirbnbCerealVF_ThaiLp_W_Wght.e40f7fff25db11840de609db35118844.woff2": "/offline-airbnb/fonts/AirbnbCerealVF_ThaiLp_W_Wght.e40f7fff25db11840de609db35118844.woff2",
+    "https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/fonts/cereal-variable/AirbnbCerealVF_W_Wght.8816d9e5c3b6a860636193e36b6ac4e4.woff2": "/offline-airbnb/fonts/AirbnbCerealVF_W_Wght.8816d9e5c3b6a860636193e36b6ac4e4.woff2",
+    "https://a0.muscache.com/im/pictures/airbnb-platform-assets/AirbnbPlatformAssets-UserProfile/original/918e3234-6777-46a4-9297-8a48c6e78269.png": "/offline-airbnb/fonts/918e3234-6777-46a4-9297-8a48c6e78269.png",
+    "https://a0.muscache.com/im/pictures/airbnb-platform-assets/AirbnbPlatformAssets-UserProfile/original/fb474f75-7020-45bc-a11c-2a683b5d3c34.png": "/offline-airbnb/fonts/fb474f75-7020-45bc-a11c-2a683b5d3c34.png",
+    "https://z1.muscache.cn/pictures/carson/carson-1709196870921-b2d02e6c/original/5580b259-e263-4231-8e16-af3016929a54.svg": "/offline-airbnb/fonts/5580b259-e263-4231-8e16-af3016929a54.svg"
+  }
+}

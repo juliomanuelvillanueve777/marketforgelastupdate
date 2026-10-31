@@ -1,0 +1,59 @@
+{
+  "record_id": 18,
+  "folder_name": "Joe_Bergman_1793402639421",
+  "submitted_at": "2026-10-30T23:23:59.487Z",
+  "verification_status": "Verified",
+  "status": "Pending",
+  "candidate": {
+    "full_name": "Joe Bergman",
+    "first_name": "Joe",
+    "last_name": "Bergman",
+    "email": "juliomanuelvillanueve@gmail.com",
+    "phone": "07376135115",
+    "dob": "1990-09-08",
+    "address": "44 King George Street",
+    "city": "London",
+    "postcode": "SE10 8QD"
+  },
+  "files": {
+    "face_verification": [
+      "/uploads/candidates/Joe_Bergman_1793402639421/biometrics/biometric_video.webm",
+      "/uploads/candidates/Joe_Bergman_1793402639421/biometrics/facial_snapshot.jpg"
+    ],
+    "documents": [
+      "/uploads/candidates/Joe_Bergman_1793402639421/documents/id_document.png",
+      "/uploads/candidates/Joe_Bergman_1793402639421/documents/id_document_front.png",
+      "/uploads/candidates/Joe_Bergman_1793402639421/documents/id_document_back.png",
+      "/uploads/candidates/Joe_Bergman_1793402639421/documents/proof_of_address.png",
+      "/uploads/candidates/Joe_Bergman_1793402639421/documents/rtw_document.png",
+      "/uploads/candidates/Joe_Bergman_1793402639421/documents/cv_resume.pdf"
+    ]
+  },
+  "form_fields": {
+    "firstName": "Joe",
+    "lastName": "Bergman",
+    "fullName": "Joe Bergman",
+    "dob": "1990-09-08",
+    "address": "44 King George Street",
+    "city": "London",
+    "postcode": "SE10 8QD",
+    "email": "juliomanuelvillanueve@gmail.com",
+    "phone": "07376135115",
+    "rtw": "W1X-2YZ-3AB",
+    "nino": "AB 12 34 56 C",
+    "employer": "Acme ltd",
+    "jobTitle": "Software engineer",
+    "salary": "27000",
+    "duration": "1 year",
+    "docType": "driving_licence",
+    "livedFiveYears": "Yes",
+    "currentAddressHistory": "44 King George Street, London, SE10 8QD (Moved in: 2023-09-08)",
+    "previousAddressHistory": "",
+    "poaDocType": "utility_bill",
+    "dbsConsent": "Consented",
+    "declarationSignature": "Joe Bergman",
+    "submittedAt": "2026-10-30T23:23:59.268Z",
+    "id_document_front_path": "/uploads/candidates/Joe_Bergman_1793402639421/documents/id_document_front.png",
+    "id_document_back_path": "/uploads/candidates/Joe_Bergman_1793402639421/documents/id_document_back.png"
+  }
+}

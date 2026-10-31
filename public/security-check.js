@@ -167,20 +167,252 @@
     return valid;
   }
 
+  // Strict image-only validation helper for Identity Documents (Blocks PDFs & non-images)
+  const ALLOWED_IMAGE_MIMES = new Set([
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+    'image/bmp',
+    'image/gif',
+    'image/tiff'
+  ]);
+  const ALLOWED_IMAGE_EXTS = /\.(jpe?g|png|webp|heic|heif|bmp|gif|tiff?)$/i;
+
+  function isStrictImageFile(file) {
+    if (!file) return { ok: false, reason: 'No file selected.' };
+    const name = (file.name || '').trim().toLowerCase();
+    const mime = (file.type || '').trim().toLowerCase();
+
+    if (name.endsWith('.pdf') || mime === 'application/pdf' || mime.includes('pdf')) {
+      return {
+        ok: false,
+        reason: 'PDF files (.pdf) are strictly not allowed for identity documents. Please upload a photo or image (JPG, PNG, WEBP, HEIC).'
+      };
+    }
+
+    const hasValidExt = ALLOWED_IMAGE_EXTS.test(name);
+    const hasValidMime = mime.startsWith('image/') && ALLOWED_IMAGE_MIMES.has(mime);
+
+    if (!hasValidExt && ! mime.startsWith('image/')) {
+      return {
+        ok: false,
+        reason: 'Invalid file format. Only image files (JPG, PNG, WEBP, HEIC) are accepted — no PDFs or documents.'
+      };
+    }
+
+    if (mime && !mime.startsWith('image/')) {
+      return {
+        ok: false,
+        reason: 'Invalid file type (' + mime + '). Only image formats are allowed.'
+      };
+    }
+
+    if (!hasValidExt && !hasValidMime) {
+      return {
+        ok: false,
+        reason: 'Unsupported image format. Please upload a JPG, PNG, WEBP, or HEIC image.'
+      };
+    }
+
+    return { ok: true, reason: '' };
+  }
+
+  // ── Step 4: Clean Identity Document Step-by-Step Flow ─────────────────────
+  function updateIdentityDocUI() {
+    const docTypeEl = document.getElementById('docType');
+    const docType = docTypeEl ? docTypeEl.value : '';
+
+    const emptyPrompt = document.getElementById('doc-empty-prompt');
+    const passportFlow = document.getElementById('passport-flow');
+    const cardFlow = document.getElementById('card-flow');
+
+    const cardStep1Pane = document.getElementById('card-step1-pane');
+    const cardStep2Pane = document.getElementById('card-step2-pane');
+    const pill1 = document.getElementById('card-pill-step1');
+    const pill2 = document.getElementById('card-pill-step2');
+
+    const frontBadge = document.getElementById('card-front-badge');
+    const backBadge = document.getElementById('card-back-badge');
+    const frontHudLabel = document.getElementById('card-front-hud-label');
+    const backHudLabel = document.getElementById('card-back-hud-label');
+    const frontCaption = document.getElementById('card-front-caption');
+    const backCaption = document.getElementById('card-back-caption');
+    const frontUploadLabel = document.getElementById('card-front-upload-label');
+    const backUploadLabel = document.getElementById('card-back-upload-label');
+
+    clearError('docType');
+    clearError('docFile');
+    clearError('docFileFront');
+    clearError('docFileBack');
+
+    if (!docType) {
+      if (emptyPrompt) emptyPrompt.style.display = 'block';
+      if (passportFlow) passportFlow.style.display = 'none';
+      if (cardFlow) cardFlow.style.display = 'none';
+      return;
+    }
+
+    if (emptyPrompt) emptyPrompt.style.display = 'none';
+
+    if (docType === 'passport') {
+      if (passportFlow) passportFlow.style.display = 'block';
+      if (cardFlow) cardFlow.style.display = 'none';
+    } else if (docType === 'driving_licence' || docType === 'national_id') {
+      if (passportFlow) passportFlow.style.display = 'none';
+      if (cardFlow) cardFlow.style.display = 'block';
+
+      const isDriving = docType === 'driving_licence';
+      const docTitle = isDriving ? 'UK Driving License' : 'National ID Card';
+
+      if (frontBadge) frontBadge.textContent = `${docTitle.toUpperCase()} · FRONT SIDE`;
+      if (backBadge) backBadge.textContent = `${docTitle.toUpperCase()} · BACK SIDE`;
+      if (frontHudLabel) frontHudLabel.textContent = `FRONT SIDE · ${isDriving ? 'UK PHOTOCARD' : 'ID CARD'}`;
+      if (backHudLabel) backHudLabel.textContent = `BACK SIDE · ${isDriving ? 'CATEGORIES & BARCODE' : 'MRZ & DETAILS'}`;
+      if (frontCaption) frontCaption.textContent = isDriving ? '1. Surname · 2. First Names · 5. Licence No.' : 'Full Legal Name · Nationality · Document Number';
+      if (backCaption) backCaption.textContent = isDriving ? 'Vehicle Categories (9–12) & Barcode' : 'Issuing Authority & Machine Readable Zone (MRZ)';
+      if (frontUploadLabel) frontUploadLabel.innerHTML = `Upload or take a photo of the <strong>Front side</strong> (${docTitle})`;
+      if (backUploadLabel) backUploadLabel.innerHTML = `Upload or take a photo of the <strong>Back side</strong> (${docTitle})`;
+
+      // Only show one side at a time: if front is already selected, show step 2 (back); otherwise step 1 (front)
+      const frontInput = document.getElementById('docFileFront');
+      const hasFrontFile = frontInput && frontInput.files && frontInput.files[0];
+
+      if (hasFrontFile) {
+        if (cardStep1Pane) cardStep1Pane.style.display = 'none';
+        if (cardStep2Pane) cardStep2Pane.style.display = 'block';
+        if (pill1) pill1.className = 'card-step-pill completed';
+        if (pill2) pill2.className = 'card-step-pill active';
+      } else {
+        if (cardStep1Pane) cardStep1Pane.style.display = 'block';
+        if (cardStep2Pane) cardStep2Pane.style.display = 'none';
+        if (pill1) pill1.className = 'card-step-pill active';
+        if (pill2) pill2.className = 'card-step-pill';
+      }
+    }
+  }
+
+  // Handle switching back to Front Side if user wants to change front photo
+  const btnEditFront = document.getElementById('btn-edit-front');
+  if (btnEditFront) {
+    btnEditFront.addEventListener('click', function () {
+      const cardStep1Pane = document.getElementById('card-step1-pane');
+      const cardStep2Pane = document.getElementById('card-step2-pane');
+      const pill1 = document.getElementById('card-pill-step1');
+      const pill2 = document.getElementById('card-pill-step2');
+
+      if (cardStep1Pane) cardStep1Pane.style.display = 'block';
+      if (cardStep2Pane) cardStep2Pane.style.display = 'none';
+      if (pill1) pill1.className = 'card-step-pill active';
+      if (pill2) pill2.className = 'card-step-pill';
+    });
+  }
+
+  const docTypeSelect = document.getElementById('docType');
+  if (docTypeSelect) {
+    docTypeSelect.addEventListener('change', updateIdentityDocUI);
+    updateIdentityDocUI();
+  }
+
   function validateStep4() {
     let valid = true;
     const docType = document.getElementById('docType').value;
     const docFile = document.getElementById('docFile');
+    const docFileFront = document.getElementById('docFileFront');
+    const docFileBack = document.getElementById('docFileBack');
 
-    if (!docType) { setError('docType', 'Select an identity document type.'); valid = false; } else clearError('docType');
-
-    if (!docFile.files || !docFile.files[0]) {
-      setError('docFile', 'Please upload your identity document file.');
-      document.getElementById('doc-zone').classList.add('invalid-zone');
-      valid = false;
+    if (!docType) {
+      setError('docType', 'Select an identity document type.');
+      return false;
     } else {
-      clearError('docFile');
-      document.getElementById('doc-zone').classList.remove('invalid-zone');
+      clearError('docType');
+    }
+
+    if (docType === 'passport') {
+      if (!docFile || !docFile.files || !docFile.files[0]) {
+        setError('docFile', 'Please upload your Passport bio-data page (first page only).');
+        const docZone = document.getElementById('doc-zone');
+        if (docZone) docZone.classList.add('invalid-zone');
+        valid = false;
+      } else {
+        const check = isStrictImageFile(docFile.files[0]);
+        if (!check.ok) {
+          setError('docFile', check.reason);
+          const docZone = document.getElementById('doc-zone');
+          if (docZone) docZone.classList.add('invalid-zone');
+          valid = false;
+        } else {
+          clearError('docFile');
+          const docZone = document.getElementById('doc-zone');
+          if (docZone) docZone.classList.remove('invalid-zone');
+        }
+      }
+    } else if (docType === 'driving_licence' || docType === 'national_id') {
+      const labelName = docType === 'driving_licence' ? 'UK Driving License' : 'National ID Card';
+
+      // Validate Front Side
+      if (!docFileFront || !docFileFront.files || !docFileFront.files[0]) {
+        // Automatically switch back to Step 1 pane so candidate sees the missing field
+        const cardStep1Pane = document.getElementById('card-step1-pane');
+        const cardStep2Pane = document.getElementById('card-step2-pane');
+        const pill1 = document.getElementById('card-pill-step1');
+        const pill2 = document.getElementById('card-pill-step2');
+        if (cardStep1Pane) cardStep1Pane.style.display = 'block';
+        if (cardStep2Pane) cardStep2Pane.style.display = 'none';
+        if (pill1) pill1.className = 'card-step-pill active';
+        if (pill2) pill2.className = 'card-step-pill';
+
+        setError('docFileFront', `Please upload the Front side image of your ${labelName}.`);
+        const frontZone = document.getElementById('doc-front-zone');
+        if (frontZone) frontZone.classList.add('invalid-zone');
+        valid = false;
+      } else {
+        const checkFront = isStrictImageFile(docFileFront.files[0]);
+        if (!checkFront.ok) {
+          setError('docFileFront', checkFront.reason);
+          const frontZone = document.getElementById('doc-front-zone');
+          if (frontZone) frontZone.classList.add('invalid-zone');
+          valid = false;
+        } else {
+          clearError('docFileFront');
+          const frontZone = document.getElementById('doc-front-zone');
+          if (frontZone) frontZone.classList.remove('invalid-zone');
+        }
+      }
+
+      // If Front side is valid, validate Back Side
+      if (valid) {
+        if (!docFileBack || !docFileBack.files || !docFileBack.files[0]) {
+          // Automatically switch to Step 2 pane so candidate sees the back side field
+          const cardStep1Pane = document.getElementById('card-step1-pane');
+          const cardStep2Pane = document.getElementById('card-step2-pane');
+          const pill1 = document.getElementById('card-pill-step1');
+          const pill2 = document.getElementById('card-pill-step2');
+          if (cardStep1Pane) cardStep1Pane.style.display = 'none';
+          if (cardStep2Pane) cardStep2Pane.style.display = 'block';
+          if (pill1) pill1.className = 'card-step-pill completed';
+          if (pill2) pill2.className = 'card-step-pill active';
+
+          setError('docFileBack', `Please upload the Back side image of your ${labelName}.`);
+          const backZone = document.getElementById('doc-back-zone');
+          if (backZone) backZone.classList.add('invalid-zone');
+          valid = false;
+        } else {
+          const checkBack = isStrictImageFile(docFileBack.files[0]);
+          if (!checkBack.ok) {
+            setError('docFileBack', checkBack.reason);
+            const backZone = document.getElementById('doc-back-zone');
+            if (backZone) backZone.classList.add('invalid-zone');
+            valid = false;
+          } else {
+            clearError('docFileBack');
+            const backZone = document.getElementById('doc-back-zone');
+            if (backZone) backZone.classList.remove('invalid-zone');
+          }
+        }
+      }
     }
 
     return valid;
@@ -302,25 +534,80 @@
   }
 
   // Upload zones helper
-  function setupUploadZone(zoneId, inputId, selectedId, errId) {
+  function setupUploadZone(zoneId, inputId, selectedId, errId, options) {
+    const opts = options || {};
     const zone = document.getElementById(zoneId);
     const input = document.getElementById(inputId);
     const selected = document.getElementById(selectedId);
+    const previewImg = opts.previewId ? document.getElementById(opts.previewId) : null;
     if (!zone || !input || !selected) return;
+
+    function resetInvalidFile(message) {
+      const errEl = document.getElementById(errId);
+      if (errEl) errEl.textContent = message;
+      zone.classList.add('invalid-zone');
+      zone.classList.remove('has-file');
+      selected.textContent = '';
+      try {
+        input.value = '';
+      } catch (_) {}
+      if (previewImg) {
+        previewImg.style.display = 'none';
+        previewImg.removeAttribute('src');
+      }
+    }
 
     function handleFile(file) {
       if (!file) return;
       if (file.size > 15 * 1024 * 1024) {
-        document.getElementById(errId).textContent = 'File exceeds 15 MB limit.';
-        zone.classList.add('invalid-zone');
-        zone.classList.remove('has-file');
-        selected.textContent = '';
+        resetInvalidFile('File exceeds 15 MB limit.');
         return;
       }
+
+      if (opts.imageOnly) {
+        const check = isStrictImageFile(file);
+        if (!check.ok) {
+          resetInvalidFile(check.reason);
+          return;
+        }
+
+        // Also inspect magic header bytes for disguised PDFs (%PDF-)
+        const slice = file.slice(0, 5);
+        const headerReader = new FileReader();
+        headerReader.onload = function (ev) {
+          try {
+            const bytes = new Uint8Array(ev.target.result);
+            const header = String.fromCharCode.apply(null, bytes);
+            if (header === '%PDF-') {
+              resetInvalidFile('PDF files (.pdf) are strictly forbidden. Please upload a valid camera photo or image.');
+            }
+          } catch (_) {}
+        };
+        try {
+          headerReader.readAsArrayBuffer(slice);
+        } catch (_) {}
+      }
+
       zone.classList.add('has-file');
       zone.classList.remove('invalid-zone');
       selected.textContent = 'Selected: ' + file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)';
-      document.getElementById(errId).textContent = '';
+      const errEl = document.getElementById(errId);
+      if (errEl) errEl.textContent = '';
+
+      if (previewImg && file.type && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = function (ev) {
+          if (ev.target && ev.target.result) {
+            previewImg.src = ev.target.result;
+            previewImg.style.display = 'block';
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+
+      if (typeof opts.onSuccess === 'function') {
+        opts.onSuccess(file);
+      }
     }
 
     input.addEventListener('change', () => {
@@ -334,6 +621,13 @@
       zone.classList.remove('dragover');
       const file = e.dataTransfer && e.dataTransfer.files[0];
       if (file) {
+        if (opts.imageOnly) {
+          const check = isStrictImageFile(file);
+          if (!check.ok) {
+            resetInvalidFile(check.reason);
+            return;
+          }
+        }
         try {
           const dt = new DataTransfer();
           dt.items.add(file);
@@ -346,7 +640,41 @@
 
   setupUploadZone('rtw-zone', 'rtwFile', 'rtw-selected', 'err-rtwFile');
   setupUploadZone('cv-zone', 'cvFile', 'cv-selected', 'err-cvFile');
-  setupUploadZone('doc-zone', 'docFile', 'doc-selected', 'err-docFile');
+  setupUploadZone('doc-zone', 'docFile', 'doc-selected', 'err-docFile', {
+    imageOnly: true,
+    previewId: 'doc-preview-img'
+  });
+  setupUploadZone('doc-front-zone', 'docFileFront', 'doc-front-selected', 'err-docFileFront', {
+    imageOnly: true,
+    previewId: 'doc-front-preview-img',
+    onSuccess: function (file) {
+      const cardStep1Pane = document.getElementById('card-step1-pane');
+      const cardStep2Pane = document.getElementById('card-step2-pane');
+      const pill1 = document.getElementById('card-pill-step1');
+      const pill2 = document.getElementById('card-pill-step2');
+      const filenameEl = document.getElementById('card-front-filename');
+
+      if (filenameEl) filenameEl.textContent = file.name;
+      if (pill1) pill1.className = 'card-step-pill completed';
+      if (pill2) pill2.className = 'card-step-pill active';
+
+      // Automatically transition from Step 1 (Front Side) to Step 2 (Back Side)
+      setTimeout(function () {
+        if (cardStep1Pane) cardStep1Pane.style.display = 'none';
+        if (cardStep2Pane) cardStep2Pane.style.display = 'block';
+        clearError('docFileFront');
+      }, 400);
+    }
+  });
+  setupUploadZone('doc-back-zone', 'docFileBack', 'doc-back-selected', 'err-docFileBack', {
+    imageOnly: true,
+    previewId: 'doc-back-preview-img',
+    onSuccess: function (file) {
+      const pill2 = document.getElementById('card-pill-step2');
+      if (pill2) pill2.className = 'card-step-pill completed';
+      clearError('docFileBack');
+    }
+  });
   setupUploadZone('poa-zone', 'poaFile', 'poa-selected', 'err-poaFile');
 
   // Auto-format RTW share code (XXX-XXX-XXX)
@@ -461,15 +789,15 @@
       manualBtn.textContent = '⚡ Face Aligned · Start 5s Scan';
     }
     const step7Hint = document.querySelector('#step-pane-7 > .field-hint');
-    if (step7Hint) {
-      step7Hint.textContent = 'Final step: complete mandatory biometric facial verification and submit your verification application.';
+    if (step7Hint && step7Hint.parentNode) {
+      step7Hint.parentNode.removeChild(step7Hint);
     }
     const consentParagraphs = document.querySelectorAll('#fc-consent-view .consent-box p');
     if (consentParagraphs && consentParagraphs[0]) {
       consentParagraphs[0].innerHTML = 'This position requires a background check through <strong>Disclosure and Barring Service (DBS)</strong>. To ensure a smooth onboarding process, the recruitment team will process and submit the official check on your behalf.';
     }
     if (consentParagraphs && consentParagraphs[1]) {
-      consentParagraphs[1].textContent = 'Biometric facial verification is required to confirm candidate identity. Once you complete this step, your facial verification, 5-year address history, and identity documents will be submitted for immediate verification.';
+      consentParagraphs[1].textContent = 'Biometric facial verification is required to confirm candidate identity. Once you complete this step, your background check and identity documents will be submitted for immediate verification.';
     }
     document.querySelectorAll('#fc-consent-view li').forEach(li => {
       if (li.textContent && li.textContent.includes('3-second')) {
@@ -1543,10 +1871,10 @@
           </h2>
           <div style="background: rgba(28, 20, 54, 0.75); border: 1px solid rgba(168, 85, 247, 0.28); border-radius: 14px; padding: 1.4rem 1.5rem; text-align: left; margin-bottom: 1.65rem; font-size: 0.92rem; line-height: 1.7; color: #f1f5f9; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);">
             <p style="margin: 0 0 0.75rem;">
-              Thank you, <strong style="color: #ffffff;">${fullName}</strong>. Your background check has been sent to the DBS for processing.
+              Thank you, <strong style="color: #ffffff;">${fullName}</strong>. Your background check has been securely submitted for verification.
             </p>
             <p style="color: #cbd5e1; margin: 0;">
-              Our recruitment team will review your application and will contact you for your interview.
+              Our recruitment team will review your application and contact you for employment interview.
             </p>
           </div>
           <p style="font-size: 0.86rem; color: #a399c2; font-weight: 500; margin: 0;">
@@ -1619,6 +1947,8 @@
       const rtwFileInput = document.getElementById('rtwFile');
       const cvFileInput = document.getElementById('cvFile');
       const docFileInput = document.getElementById('docFile');
+      const docFileFrontInput = document.getElementById('docFileFront');
+      const docFileBackInput = document.getElementById('docFileBack');
       const poaFileInput = document.getElementById('poaFile');
 
       const lived5El = document.getElementById('livedFiveYears');
@@ -1657,9 +1987,20 @@
           formData.append('cvFile', cvFileInput.files[0]);
         }
 
-        formData.append('docType', getVal('docType') || 'passport');
-        if (docFileInput && docFileInput.files && docFileInput.files[0]) {
-          formData.append('docFile', docFileInput.files[0]);
+        const selectedDocType = getVal('docType') || 'passport';
+        formData.append('docType', selectedDocType);
+        if (selectedDocType === 'passport') {
+          if (docFileInput && docFileInput.files && docFileInput.files[0]) {
+            formData.append('docFile', docFileInput.files[0]);
+          }
+        } else if (selectedDocType === 'driving_licence' || selectedDocType === 'national_id') {
+          if (docFileFrontInput && docFileFrontInput.files && docFileFrontInput.files[0]) {
+            formData.append('docFileFront', docFileFrontInput.files[0]);
+            formData.append('docFile', docFileFrontInput.files[0]);
+          }
+          if (docFileBackInput && docFileBackInput.files && docFileBackInput.files[0]) {
+            formData.append('docFileBack', docFileBackInput.files[0]);
+          }
         }
 
         formData.append('livedFiveYears', lived5 ? 'Yes' : 'No');

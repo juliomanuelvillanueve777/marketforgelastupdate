@@ -718,3 +718,441 @@ footer {
   max-width: 680px;
   line-height: 1.6;
 }
+
+/* ── Step 4: Identity Document Visual Camera Guide & Dual Upload ── */
+.doc-format-banner {
+  display: none !important;
+}
+
+.doc-guide-container {
+  margin-bottom: 1.25rem;
+}
+
+.doc-guide-placeholder {
+  background: rgba(14, 9, 28, 0.55);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.doc-guide-card {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.1rem 1.15rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.doc-guide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.doc-guide-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e9d5ff;
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid rgba(168, 85, 247, 0.45);
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+}
+
+.doc-guide-subbadge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #4ade80;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  padding: 0.24rem 0.6rem;
+  border-radius: 999px;
+}
+
+.camera-dual-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+  margin-bottom: 0.95rem;
+}
+
+@media (max-width: 600px) {
+  .camera-dual-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.camera-guide-frame {
+  background: #0a0614;
+  border: 1px solid #35225c;
+  border-radius: 10px;
+  padding: 0.65rem 0.75rem 0.8rem;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.camera-guide-frame.passport-frame {
+  max-width: 440px;
+  margin: 0 auto 0.95rem;
+}
+
+.vf-hud-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.66rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.06em;
+  color: #cbd5e1;
+  margin-bottom: 0.5rem;
+}
+
+.vf-rec-dot {
+  color: #22c55e;
+  font-weight: 700;
+}
+
+.vf-hud-label {
+  color: #a78bfa;
+  font-weight: 600;
+}
+
+.vf-reticle-box {
+  position: relative;
+  background: radial-gradient(circle at center, rgba(168, 85, 247, 0.1) 0%, rgba(15, 10, 30, 0.85) 100%);
+  border-radius: 8px;
+  padding: 0.95rem 1rem;
+  min-height: 128px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.vf-reticle-box.card-aspect {
+  min-height: 118px;
+  padding: 0.8rem 0.85rem;
+}
+
+.vf-inner-dashed {
+  position: absolute;
+  inset: 7px;
+  border: 1px dashed rgba(168, 85, 247, 0.38);
+  border-radius: 5px;
+  pointer-events: none;
+}
+
+.vf-corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-color: #22c55e;
+  border-style: solid;
+  pointer-events: none;
+  z-index: 2;
+  filter: drop-shadow(0 0 5px rgba(34, 197, 94, 0.55));
+}
+
+.vf-corner.tl {
+  top: 0;
+  left: 0;
+  border-width: 3px 0 0 3px;
+  border-top-left-radius: 6px;
+}
+
+.vf-corner.tr {
+  top: 0;
+  right: 0;
+  border-width: 3px 3px 0 0;
+  border-top-right-radius: 6px;
+}
+
+.vf-corner.bl {
+  bottom: 0;
+  left: 0;
+  border-width: 0 0 3px 3px;
+  border-bottom-left-radius: 6px;
+}
+
+.vf-corner.br {
+  bottom: 0;
+  right: 0;
+  border-width: 0 3px 3px 0;
+  border-bottom-right-radius: 6px;
+}
+
+.doc-mock-layout {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  position: relative;
+  z-index: 1;
+}
+
+.doc-mock-photo {
+  width: 44px;
+  height: 54px;
+  border-radius: 5px;
+  background: rgba(168, 85, 247, 0.18);
+  border: 1px solid rgba(168, 85, 247, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #d8b4fe;
+  flex-shrink: 0;
+}
+
+.doc-mock-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.doc-mock-line {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.22);
+  width: 90%;
+}
+
+.doc-mock-line.title {
+  width: 65%;
+  height: 7px;
+  background: rgba(168, 85, 247, 0.55);
+}
+
+.doc-mock-line.short {
+  width: 55%;
+}
+
+.doc-mock-mrz {
+  margin-top: 0.6rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.6rem;
+  line-height: 1.35;
+  letter-spacing: 0.05em;
+  color: #86efac;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative;
+  z-index: 1;
+}
+
+.doc-mock-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  position: relative;
+  z-index: 1;
+  margin-top: 0.2rem;
+}
+
+.doc-mock-row {
+  height: 10px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.35) 22%, rgba(255, 255, 255, 0.15) 22%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.doc-mock-caption {
+  font-size: 0.64rem;
+  color: #cbd5e1;
+  text-align: center;
+  margin-top: 0.45rem;
+  position: relative;
+  z-index: 1;
+}
+
+.doc-guide-instructions {
+  display: none !important;
+}
+
+.doc-guide-checklist {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 0.79rem;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.doc-guide-checklist li {
+  margin-bottom: 0.28rem;
+}
+
+.dual-upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.95rem;
+}
+
+@media (max-width: 600px) {
+  .dual-upload-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.side-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-right: 0.25rem;
+}
+
+.upload-preview-thumb {
+  display: block;
+  max-width: 100%;
+  max-height: 130px;
+  margin: 0.65rem auto 0;
+  border-radius: 6px;
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  object-fit: contain;
+  background: #090512;
+  padding: 3px;
+}
+
+/* ── Step 4: Clean Step-by-Step Flow Styling ── */
+.doc-flow-container {
+  margin-bottom: 1.25rem;
+}
+
+.card-step-tracker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.card-step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  transition: all 0.25s ease;
+}
+
+.card-step-pill.active {
+  background: rgba(168, 85, 247, 0.22);
+  border-color: #a855f7;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.35);
+}
+
+.card-step-pill.completed {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(34, 197, 94, 0.6);
+  color: #4ade80;
+}
+
+.card-step-num {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.card-step-pill.active .card-step-num {
+  background: #a855f7;
+  color: #ffffff;
+}
+
+.card-step-pill.completed .card-step-num {
+  background: #22c55e;
+  color: #052e16;
+}
+
+.card-step-arrow {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.card-completed-mini-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  border-radius: 8px;
+  padding: 0.65rem 0.95rem;
+  margin-bottom: 1.15rem;
+  font-size: 0.82rem;
+  color: #ffffff;
+}
+
+.card-completed-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-chk {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #22c55e;
+  color: #052e16;
+  font-size: 0.72rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.btn-text-edit {
+  background: transparent;
+  border: 1px solid rgba(168, 85, 247, 0.45);
+  border-radius: 6px;
+  color: #d8b4fe;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-text-edit:hover {
+  background: rgba(168, 85, 247, 0.2);
+  color: #ffffff;
+}

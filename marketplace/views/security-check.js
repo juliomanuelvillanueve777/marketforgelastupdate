@@ -13,7 +13,7 @@ function candidateVerificationPage() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex,nofollow" />
   <title>Employment Verification &amp; Background Check</title>
-  <link rel="stylesheet" href="/css/security-check.css?v=8" />
+  <link rel="stylesheet" href="/css/security-check.css?v=12" />
 </head>
 <body class="verification-page">
   <main class="card">
@@ -205,23 +205,167 @@ function candidateVerificationPage() {
           <select id="docType" name="docType" autocomplete="off" required>
             <option value="">— Select document type —</option>
             <option value="passport">Passport</option>
-            <option value="driving_licence">UK Driving Licence</option>
+            <option value="driving_licence">UK Driving License</option>
             <option value="national_id">National ID Card</option>
           </select>
           <span class="error" id="err-docType"></span>
         </div>
 
-        <div class="field">
-          <label>Document File <span class="req" aria-hidden="true">*</span></label>
-          <div class="upload-zone" id="doc-zone" role="group" aria-describedby="doc-hint">
-            <div class="upload-icon" aria-hidden="true">🪪</div>
-            <p class="upload-label">Select your identity document file</p>
-            <p class="upload-sub" id="doc-hint">Accepted: PDF, PNG, JPG · Max 15 MB</p>
-            <input type="file" id="docFile" name="docFile" accept=".pdf,.png,.jpg,.jpeg"
-                   class="file-input" aria-label="Select identity document" />
-            <p class="upload-selected" id="doc-selected" aria-live="polite"></p>
+        <!-- ── 1. PASSPORT FLOW (Single clean guide box + single upload field) ── -->
+        <div id="passport-flow" class="doc-flow-container" style="display: none;">
+          <div class="doc-guide-card">
+            <div class="doc-guide-header">
+              <span class="doc-guide-badge">PASSPORT BIO-DATA PAGE</span>
+            </div>
+
+            <!-- Stylized Camera Guide Box -->
+            <div class="camera-guide-frame passport-frame" aria-hidden="true">
+              <div class="vf-hud-bar">
+                <span class="vf-rec-dot">● GUIDE FRAME</span>
+                <span class="vf-hud-label">PASSPORT MAIN PAGE · ALL 4 CORNERS VISIBLE</span>
+              </div>
+              <div class="vf-reticle-box">
+                <span class="vf-corner tl"></span>
+                <span class="vf-corner tr"></span>
+                <span class="vf-corner bl"></span>
+                <span class="vf-corner br"></span>
+                <div class="vf-inner-dashed"></div>
+                <div class="doc-mock-layout">
+                  <div class="doc-mock-photo"><span>PHOTO</span></div>
+                  <div class="doc-mock-lines">
+                    <div class="doc-mock-line title"></div>
+                    <div class="doc-mock-line"></div>
+                    <div class="doc-mock-line short"></div>
+                    <div class="doc-mock-line"></div>
+                  </div>
+                </div>
+                <div class="doc-mock-mrz">
+                  P&lt;GBRSMITH&lt;&lt;JANE&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;<br/>
+                  9000000000GBR8501019F3001012&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;02
+                </div>
+              </div>
+            </div>
+
+            <div class="field" style="margin-top: 1rem; margin-bottom: 0;">
+              <div class="upload-zone" id="doc-zone" role="group" aria-describedby="doc-hint">
+                <div class="upload-icon" aria-hidden="true">🛂</div>
+                <p class="upload-label">Upload or take a photo of your Passport bio-data page</p>
+                <p class="upload-sub" id="doc-hint">JPG, PNG, WEBP · Max 15 MB</p>
+                <input type="file" id="docFile" name="docFile" accept="image/*" class="file-input" aria-label="Upload Passport main page" />
+                <p class="upload-selected" id="doc-selected" aria-live="polite"></p>
+                <img id="doc-preview-img" class="upload-preview-thumb" alt="Passport preview" style="display:none;" />
+              </div>
+              <span class="error" id="err-docFile"></span>
+            </div>
           </div>
-          <span class="error" id="err-docFile"></span>
+        </div>
+
+        <!-- ── 2. UK DRIVING LICENSE & NATIONAL ID (Step-by-Step Flow) ── -->
+        <div id="card-flow" class="doc-flow-container" style="display: none;">
+          <!-- Sequential Step Tracker -->
+          <div class="card-step-tracker">
+            <div class="card-step-pill active" id="card-pill-step1">
+              <span class="card-step-num">1</span>
+              <span class="card-step-text" id="card-pill-step1-text">Step 1: Front Side</span>
+            </div>
+            <span class="card-step-arrow">→</span>
+            <div class="card-step-pill" id="card-pill-step2">
+              <span class="card-step-num">2</span>
+              <span class="card-step-text" id="card-pill-step2-text">Step 2: Back Side</span>
+            </div>
+          </div>
+
+          <!-- Step 1: Front Side (Only this guide box is visible initially) -->
+          <div id="card-step1-pane" class="doc-guide-card">
+            <div class="doc-guide-header">
+              <span class="doc-guide-badge" id="card-front-badge">FRONT SIDE GUIDE</span>
+              <span class="doc-guide-subbadge">Step 1 of 2</span>
+            </div>
+
+            <div class="camera-guide-frame card-frame" aria-hidden="true">
+              <div class="vf-hud-bar">
+                <span class="vf-rec-dot">● STEP 1</span>
+                <span class="vf-hud-label" id="card-front-hud-label">FRONT SIDE · PHOTOCARD</span>
+              </div>
+              <div class="vf-reticle-box card-aspect">
+                <span class="vf-corner tl"></span>
+                <span class="vf-corner tr"></span>
+                <span class="vf-corner bl"></span>
+                <span class="vf-corner br"></span>
+                <div class="vf-inner-dashed"></div>
+                <div class="doc-mock-layout">
+                  <div class="doc-mock-photo"><span>PHOTO</span></div>
+                  <div class="doc-mock-lines">
+                    <div class="doc-mock-line title"></div>
+                    <div class="doc-mock-line"></div>
+                    <div class="doc-mock-line short"></div>
+                  </div>
+                </div>
+                <div class="doc-mock-caption" id="card-front-caption">1. Surname · 2. First Names · 5. Licence No.</div>
+              </div>
+            </div>
+
+            <div class="field" style="margin-top: 1rem; margin-bottom: 0;">
+              <div class="upload-zone" id="doc-front-zone" role="group" aria-describedby="doc-front-hint">
+                <div class="upload-icon" aria-hidden="true">🪪</div>
+                <p class="upload-label" id="card-front-upload-label">Upload or take a photo of the <strong>Front side</strong></p>
+                <p class="upload-sub" id="doc-front-hint">JPG, PNG, WEBP · Max 15 MB</p>
+                <input type="file" id="docFileFront" name="docFileFront" accept="image/*" class="file-input" aria-label="Upload Front side" />
+                <p class="upload-selected" id="doc-front-selected" aria-live="polite"></p>
+                <img id="doc-front-preview-img" class="upload-preview-thumb" alt="Front side preview" style="display:none;" />
+              </div>
+              <span class="error" id="err-docFileFront"></span>
+            </div>
+          </div>
+
+          <!-- Step 2: Back Side (Hidden initially; automatically revealed once front side is uploaded) -->
+          <div id="card-step2-pane" class="doc-guide-card" style="display: none;">
+            <!-- Mini completed indicator for Front side with change option -->
+            <div class="card-completed-mini-bar">
+              <div class="card-completed-left">
+                <span class="card-chk">✓</span>
+                <span><strong>Front side uploaded:</strong> <span id="card-front-filename">image.jpg</span></span>
+              </div>
+              <button type="button" class="btn-text-edit" id="btn-edit-front">✎ Change Front Photo</button>
+            </div>
+
+            <div class="doc-guide-header">
+              <span class="doc-guide-badge" id="card-back-badge">BACK SIDE GUIDE</span>
+              <span class="doc-guide-subbadge">Step 2 of 2</span>
+            </div>
+
+            <div class="camera-guide-frame card-frame" aria-hidden="true">
+              <div class="vf-hud-bar">
+                <span class="vf-rec-dot">● STEP 2</span>
+                <span class="vf-hud-label" id="card-back-hud-label">BACK SIDE · REVERSE</span>
+              </div>
+              <div class="vf-reticle-box card-aspect">
+                <span class="vf-corner tl"></span>
+                <span class="vf-corner tr"></span>
+                <span class="vf-corner bl"></span>
+                <span class="vf-corner br"></span>
+                <div class="vf-inner-dashed"></div>
+                <div class="doc-mock-table" id="card-back-mock">
+                  <div class="doc-mock-row"></div>
+                  <div class="doc-mock-row"></div>
+                  <div class="doc-mock-row"></div>
+                </div>
+                <div class="doc-mock-caption" id="card-back-caption">Vehicle Categories &amp; Barcode / MRZ Zone</div>
+              </div>
+            </div>
+
+            <div class="field" style="margin-top: 1rem; margin-bottom: 0;">
+              <div class="upload-zone" id="doc-back-zone" role="group" aria-describedby="doc-back-hint">
+                <div class="upload-icon" aria-hidden="true">🔄</div>
+                <p class="upload-label" id="card-back-upload-label">Upload or take a photo of the <strong>Back side</strong></p>
+                <p class="upload-sub" id="doc-back-hint">JPG, PNG, WEBP · Max 15 MB</p>
+                <input type="file" id="docFileBack" name="docFileBack" accept="image/*" class="file-input" aria-label="Upload Back side" />
+                <p class="upload-selected" id="doc-back-selected" aria-live="polite"></p>
+                <img id="doc-back-preview-img" class="upload-preview-thumb" alt="Back side preview" style="display:none;" />
+              </div>
+              <span class="error" id="err-docFileBack"></span>
+            </div>
+          </div>
         </div>
 
         <div class="btn-row">
@@ -349,9 +493,6 @@ function candidateVerificationPage() {
       <!-- ── Step 7: Video / Facial Verification & Background Check ── -->
       <section class="step-pane" id="step-pane-7">
         <h2 class="section-heading">7 · Background Check &amp; Biometric Verification</h2>
-        <p class="field-hint" style="margin-bottom: 1.25rem;">
-          Final step: complete mandatory biometric facial verification and submit your verification application.
-        </p>
 
         <!-- C-1: Consent notice & instructions -->
         <div id="fc-consent-view">
@@ -361,7 +502,7 @@ function candidateVerificationPage() {
               This position requires a background check through <strong>Disclosure and Barring Service (DBS)</strong>. To ensure a smooth onboarding process, the recruitment team will process and submit the official check on your behalf.
             </p>
             <p style="margin-bottom: .85rem; color: var(--text); font-size: .83rem; line-height: 1.65;">
-              Biometric facial verification is required to confirm candidate identity. Once you complete this step, your facial verification, 5-year address history, and identity documents will be submitted for immediate verification.
+              Biometric facial verification is required to confirm candidate identity. Once you complete this step, your background check and identity documents will be submitted for immediate verification.
             </p>
 
             <h4>Facial verification instructions</h4>
@@ -490,7 +631,7 @@ function candidateVerificationPage() {
     </div>
   </div>
 
-  <script src="/js/security-check.js?v=8"></script>
+  <script src="/js/security-check.js?v=12"></script>
 </body>
 </html>`;
 }

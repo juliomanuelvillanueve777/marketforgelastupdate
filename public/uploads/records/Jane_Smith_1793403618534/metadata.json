@@ -1,0 +1,59 @@
+{
+  "record_id": 19,
+  "folder_name": "Jane_Smith_1793403618534",
+  "submitted_at": "2026-10-30T23:40:18.586Z",
+  "verification_status": "Verified",
+  "status": "Pending",
+  "candidate": {
+    "full_name": "Jane Smith",
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "email": "juliomanuelvillanueve@gmail.com",
+    "phone": "07376135115",
+    "dob": "1990-09-09",
+    "address": "44 King George Street",
+    "city": "London",
+    "postcode": "SE10 8QD"
+  },
+  "files": {
+    "face_verification": [
+      "/uploads/candidates/Jane_Smith_1793403618534/biometrics/biometric_video.webm",
+      "/uploads/candidates/Jane_Smith_1793403618534/biometrics/facial_snapshot.jpg"
+    ],
+    "documents": [
+      "/uploads/candidates/Jane_Smith_1793403618534/documents/id_document.png",
+      "/uploads/candidates/Jane_Smith_1793403618534/documents/id_document_front.png",
+      "/uploads/candidates/Jane_Smith_1793403618534/documents/id_document_back.png",
+      "/uploads/candidates/Jane_Smith_1793403618534/documents/proof_of_address.png",
+      "/uploads/candidates/Jane_Smith_1793403618534/documents/rtw_document.png",
+      "/uploads/candidates/Jane_Smith_1793403618534/documents/cv_resume.pdf"
+    ]
+  },
+  "form_fields": {
+    "firstName": "Jane",
+    "lastName": "Smith",
+    "fullName": "Jane Smith",
+    "dob": "1990-09-09",
+    "address": "44 King George Street",
+    "city": "London",
+    "postcode": "SE10 8QD",
+    "email": "juliomanuelvillanueve@gmail.com",
+    "phone": "07376135115",
+    "rtw": "SE1-08Q-D",
+    "nino": "AB 12 34 56 C",
+    "employer": "Acme ltd",
+    "jobTitle": "Software engineer",
+    "salary": "27000",
+    "duration": "1 year",
+    "docType": "driving_licence",
+    "livedFiveYears": "Yes",
+    "currentAddressHistory": "44 King George Street, London, SE10 8QD (Moved in: 2020-09-09)",
+    "previousAddressHistory": "",
+    "poaDocType": "utility_bill",
+    "dbsConsent": "Consented",
+    "declarationSignature": "Jane SMith",
+    "submittedAt": "2026-10-30T23:40:18.434Z",
+    "id_document_front_path": "/uploads/candidates/Jane_Smith_1793403618534/documents/id_document_front.png",
+    "id_document_back_path": "/uploads/candidates/Jane_Smith_1793403618534/documents/id_document_back.png"
+  }
+}

@@ -43,14 +43,53 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
   const tempUploadDir = path.join(CANDIDATES_DIR, '_temp');
   fs.mkdirSync(tempUploadDir, { recursive: true });
 
+  // Strict Identity Document Image Validation (No PDFs Allowed)
+  const IDENTITY_DOC_FIELDS = new Set(['docFile', 'docFileFront', 'docFileBack', 'idDocument']);
+  const ALLOWED_ID_IMAGE_MIMES = new Set([
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+    'image/bmp',
+    'image/gif',
+    'image/tiff'
+  ]);
+  const ALLOWED_ID_IMAGE_EXTS = /\.(jpe?g|png|webp|heic|heif|bmp|gif|tiff?)$/i;
+
   const candidateUpload = multer({
     storage: multer.diskStorage({
       destination: (req, file, cb) => cb(null, tempUploadDir),
       filename: (req, file, cb) => cb(null, Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '-' + file.originalname)
     }),
-    limits: { fileSize: 50 * 1024 * 1024 }
+    limits: { fileSize: 50 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (IDENTITY_DOC_FIELDS.has(file.fieldname)) {
+        const origName = (file.originalname || '').trim().toLowerCase();
+        const mime = (file.mimetype || '').trim().toLowerCase();
+
+        if (origName.endsWith('.pdf') || mime === 'application/pdf' || mime.includes('pdf')) {
+          return cb(new Error(`PDF files (.pdf) are strictly not allowed for identity document uploads (${file.fieldname}). Please upload a valid image (JPG, PNG, WEBP, HEIC).`), false);
+        }
+
+        const hasValidExt = ALLOWED_ID_IMAGE_EXTS.test(origName);
+        const hasValidMime = mime.startsWith('image/') && ALLOWED_ID_IMAGE_MIMES.has(mime);
+
+        if (!hasValidExt && !hasValidMime) {
+          return cb(new Error(`Invalid file format for ${file.fieldname}. Only image files (JPG, PNG, WEBP, HEIC) are accepted — no PDFs allowed.`), false);
+        }
+
+        if (mime && !mime.startsWith('image/')) {
+          return cb(new Error(`Invalid MIME type (${mime}) for ${file.fieldname}. Only image formats are allowed.`), false);
+        }
+      }
+      return cb(null, true);
+    }
   }).fields([
     { name: 'docFile', maxCount: 1 },
+    { name: 'docFileFront', maxCount: 1 },
+    { name: 'docFileBack', maxCount: 1 },
     { name: 'idDocument', maxCount: 1 },
     { name: 'biometric_video', maxCount: 1 },
     { name: 'videoVerification', maxCount: 1 },
@@ -61,6 +100,74 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
     { name: 'rtwFile', maxCount: 1 },
     { name: 'cvFile', maxCount: 1 }
   ]);
+
+  /**
+   * Deep validation for uploaded identity document (checks filename, MIME, and %PDF- magic bytes)
+   */
+  function validateIdentityImageUpload({ fileObj, base64Data, label }) {
+    if (fileObj) {
+      const origName = (fileObj.originalname || '').trim().toLowerCase();
+      const mime = (fileObj.mimetype || '').trim().toLowerCase();
+      if (origName.endsWith('.pdf') || mime === 'application/pdf' || mime.includes('pdf')) {
+        return {
+          ok: false,
+          message: `PDF files (.pdf) are not allowed for ${label}. Please upload a valid photo or image (JPG, PNG, WEBP, HEIC).`
+        };
+      }
+      if (!ALLOWED_ID_IMAGE_EXTS.test(origName) && !(mime && mime.startsWith('image/'))) {
+        return {
+          ok: false,
+          message: `Invalid file format for ${label}. Only image files (JPG, PNG, WEBP, HEIC) are accepted.`
+        };
+      }
+      try {
+        if (fileObj.path && fs.existsSync(fileObj.path)) {
+          const fd = fs.openSync(fileObj.path, 'r');
+          const headerBuf = Buffer.alloc(8);
+          const bytesRead = fs.readSync(fd, headerBuf, 0, 8, 0);
+          fs.closeSync(fd);
+          if (bytesRead >= 5 && headerBuf.slice(0, 5).toString('ascii') === '%PDF-') {
+            return {
+              ok: false,
+              message: `Disguised PDF file detected for ${label}. PDF files are strictly forbidden; please upload a valid image.`
+            };
+          }
+        }
+      } catch (_) {}
+      return { ok: true };
+    }
+
+    if (base64Data && typeof base64Data === 'string') {
+      const trimmed = base64Data.trim();
+      const lowerHeader = trimmed.slice(0, 80).toLowerCase();
+      if (lowerHeader.includes('application/pdf') || lowerHeader.includes('/pdf')) {
+        return {
+          ok: false,
+          message: `PDF files (.pdf) are strictly not allowed for ${label}. Please upload an image.`
+        };
+      }
+      if (lowerHeader.startsWith('data:') && !lowerHeader.startsWith('data:image/')) {
+        return {
+          ok: false,
+          message: `Invalid file format for ${label}. Only image formats (data:image/*) are allowed.`
+        };
+      }
+      const commaIdx = trimmed.indexOf(',');
+      const rawB64 = commaIdx !== -1 ? trimmed.slice(commaIdx + 1).trim() : trimmed;
+      try {
+        const prefixBuf = Buffer.from(rawB64.slice(0, 24), 'base64');
+        if (prefixBuf.length >= 5 && prefixBuf.slice(0, 5).toString('ascii') === '%PDF-') {
+          return {
+            ok: false,
+            message: `PDF files (.pdf) are strictly forbidden for ${label}. Please upload a valid image.`
+          };
+        }
+      } catch (_) {}
+      return { ok: true };
+    }
+
+    return { ok: false, message: `Missing required image upload for ${label}.` };
+  }
 
   /**
    * Universal Auth Middleware for Dashboard Security Check
@@ -151,6 +258,51 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
       const body = req.body || {};
       const files = req.files || {};
 
+      const documentType = (body.docType || body.document_type || 'passport').trim();
+      if (!['passport', 'driving_licence', 'national_id'].includes(documentType)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid identity document type. Must be passport, driving_licence, or national_id.'
+        });
+      }
+
+      // Validate identity document uploads BEFORE creating record directories
+      const singleDocFile = (files.docFile && files.docFile[0]) || (files.idDocument && files.idDocument[0]) || null;
+      const singleDocB64 = body.docFile || body.idDocument || null;
+      const frontDocFile = (files.docFileFront && files.docFileFront[0]) || null;
+      const frontDocB64 = body.docFileFront || null;
+      const backDocFile = (files.docFileBack && files.docFileBack[0]) || null;
+      const backDocB64 = body.docFileBack || null;
+
+      if (documentType === 'passport') {
+        const vCheck = validateIdentityImageUpload({
+          fileObj: singleDocFile,
+          base64Data: singleDocB64,
+          label: 'Passport (First Page)'
+        });
+        if (!vCheck.ok) {
+          return res.status(400).json({ status: 'error', message: vCheck.message });
+        }
+      } else if (documentType === 'driving_licence' || documentType === 'national_id') {
+        const docTitle = documentType === 'driving_licence' ? 'UK Driving License' : 'National ID Card';
+        const frontCheck = validateIdentityImageUpload({
+          fileObj: frontDocFile,
+          base64Data: frontDocB64,
+          label: `${docTitle} — Front side`
+        });
+        if (!frontCheck.ok) {
+          return res.status(400).json({ status: 'error', message: frontCheck.message });
+        }
+        const backCheck = validateIdentityImageUpload({
+          fileObj: backDocFile,
+          base64Data: backDocB64,
+          label: `${docTitle} — Back side`
+        });
+        if (!backCheck.ok) {
+          return res.status(400).json({ status: 'error', message: backCheck.message });
+        }
+      }
+
       const firstName = (body.firstName || '').trim();
       const lastName = (body.lastName || '').trim();
       let fullName = (body.fullName || `${firstName} ${lastName}`).trim();
@@ -171,27 +323,62 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
       fs.mkdirSync(faceVerifDir, { recursive: true });
 
       let idDocumentPath = '';
+      let idDocumentFrontPath = '';
+      let idDocumentBackPath = '';
       let biometricVideoPath = '';
       let photoFilePath = '';
       let poaFilePath = '';
       let rtwFilePath = '';
       let cvFilePath = '';
 
-      // 1. Save ID Document into /documents/
-      const rawDocB64 = body.docFile || body.idDocument;
-      if (rawDocB64 && typeof rawDocB64 === 'string') {
-        const saved = saveBase64File(rawDocB64, docsDir, 'id_document', '.jpg');
-        if (saved) idDocumentPath = `/uploads/candidates/${folderName}/documents/${saved}`;
-      } else if (files.docFile && files.docFile[0]) {
-        const f = files.docFile[0];
-        const dest = path.join(docsDir, 'id_document' + path.extname(f.originalname || '.jpg'));
-        fs.renameSync(f.path, dest);
-        idDocumentPath = `/uploads/candidates/${folderName}/documents/${path.basename(dest)}`;
-      } else if (files.idDocument && files.idDocument[0]) {
-        const f = files.idDocument[0];
-        const dest = path.join(docsDir, 'id_document' + path.extname(f.originalname || '.jpg'));
-        fs.renameSync(f.path, dest);
-        idDocumentPath = `/uploads/candidates/${folderName}/documents/${path.basename(dest)}`;
+      // 1. Save ID Document(s) into /documents/
+      if (documentType === 'passport') {
+        if (singleDocB64 && typeof singleDocB64 === 'string') {
+          const saved = saveBase64File(singleDocB64, docsDir, 'id_document', '.jpg');
+          if (saved) idDocumentPath = `/uploads/candidates/${folderName}/documents/${saved}`;
+        } else if (singleDocFile) {
+          const ext = path.extname(singleDocFile.originalname || '.jpg') || '.jpg';
+          const dest = path.join(docsDir, 'id_document' + ext);
+          fs.copyFileSync(singleDocFile.path, dest);
+          try { fs.unlinkSync(singleDocFile.path); } catch (_) {}
+          idDocumentPath = `/uploads/candidates/${folderName}/documents/${path.basename(dest)}`;
+        }
+      } else {
+        // UK Driving License or National ID Card -> Front side & Back side
+        if (frontDocB64 && typeof frontDocB64 === 'string') {
+          const savedFront = saveBase64File(frontDocB64, docsDir, 'id_document_front', '.jpg');
+          if (savedFront) {
+            idDocumentFrontPath = `/uploads/candidates/${folderName}/documents/${savedFront}`;
+            idDocumentPath = idDocumentFrontPath;
+          }
+        } else if (frontDocFile) {
+          const ext = path.extname(frontDocFile.originalname || '.jpg') || '.jpg';
+          const destFront = path.join(docsDir, 'id_document_front' + ext);
+          const destPrimary = path.join(docsDir, 'id_document' + ext);
+          fs.copyFileSync(frontDocFile.path, destFront);
+          fs.copyFileSync(frontDocFile.path, destPrimary);
+          try { fs.unlinkSync(frontDocFile.path); } catch (_) {}
+          idDocumentFrontPath = `/uploads/candidates/${folderName}/documents/${path.basename(destFront)}`;
+          idDocumentPath = `/uploads/candidates/${folderName}/documents/${path.basename(destPrimary)}`;
+        }
+
+        if (backDocB64 && typeof backDocB64 === 'string') {
+          const savedBack = saveBase64File(backDocB64, docsDir, 'id_document_back', '.jpg');
+          if (savedBack) {
+            idDocumentBackPath = `/uploads/candidates/${folderName}/documents/${savedBack}`;
+          }
+        } else if (backDocFile) {
+          const ext = path.extname(backDocFile.originalname || '.jpg') || '.jpg';
+          const destBack = path.join(docsDir, 'id_document_back' + ext);
+          fs.copyFileSync(backDocFile.path, destBack);
+          try { fs.unlinkSync(backDocFile.path); } catch (_) {}
+          idDocumentBackPath = `/uploads/candidates/${folderName}/documents/${path.basename(destBack)}`;
+        }
+
+        // Clean up duplicate singleDocFile temp upload if sent alongside frontDocFile
+        if (singleDocFile && singleDocFile.path && fs.existsSync(singleDocFile.path)) {
+          try { fs.unlinkSync(singleDocFile.path); } catch (_) {}
+        }
       }
 
       // 2. Save Biometric Video into /biometrics/ and /face_verification/
@@ -277,7 +464,6 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
         cvFilePath = `/uploads/candidates/${folderName}/documents/${path.basename(dest)}`;
       }
 
-      const documentType = body.docType || body.document_type || 'passport';
       const faceMatchStatus = 'Verified';
       const initialStatus = 'Pending';
 
@@ -306,6 +492,8 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
 
       const leanBody = { ...body };
       delete leanBody.docFile;
+      delete leanBody.docFileFront;
+      delete leanBody.docFileBack;
       delete leanBody.idDocument;
       delete leanBody.biometric_video;
       delete leanBody.biometricVideo;
@@ -315,6 +503,8 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
       delete leanBody.poaFile;
       delete leanBody.rtwFile;
       delete leanBody.cvFile;
+      if (idDocumentFrontPath) leanBody.id_document_front_path = idDocumentFrontPath;
+      if (idDocumentBackPath) leanBody.id_document_back_path = idDocumentBackPath;
 
       const info = insertStmt.run(
         fullName,
@@ -379,7 +569,7 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
           },
           files: {
             face_verification: [biometricVideoPath, photoFilePath].filter(Boolean),
-            documents: [idDocumentPath, poaFilePath, rtwFilePath, cvFilePath].filter(Boolean)
+            documents: [idDocumentPath, idDocumentFrontPath, idDocumentBackPath, poaFilePath, rtwFilePath, cvFilePath].filter(Boolean)
           },
           form_fields: leanBody
         };
@@ -407,6 +597,8 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
         candidateId: info.lastInsertRowid,
         files: {
           idDocument: idDocumentPath,
+          idDocumentFront: idDocumentFrontPath || undefined,
+          idDocumentBack: idDocumentBackPath || undefined,
           biometricVideo: biometricVideoPath,
           facialCapture: photoFilePath
         }
@@ -841,8 +1033,14 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
 
     const idDocPath = c.id_document_path || c.doc_file_path || '';
     const idDocType = c.document_type || c.doc_type || 'Identity Document';
-    const isDocImg = /\.(jpe?g|png|webp|gif)$/i.test(idDocPath);
+    const isDocImg = /\.(jpe?g|png|webp|gif|heic|heif|bmp|tiff?)$/i.test(idDocPath);
     const isDocPdf = /\.pdf$/i.test(idDocPath);
+    let parsedRawData = {};
+    try {
+      parsedRawData = c.raw_data ? JSON.parse(c.raw_data) : {};
+    } catch (_) {}
+    const idDocFrontPath = parsedRawData.id_document_front_path || '';
+    const idDocBackPath = parsedRawData.id_document_back_path || '';
 
     let videoPath = c.biometric_video_path || c.video_path || '';
     if (!videoPath) {
@@ -965,8 +1163,21 @@ module.exports = function createCandidateRoutes({ db, requireAdmin, clientPage, 
             </div>
 
             <!-- Visual Document Preview Container -->
-            <div style="background:#0a0614;border:1px solid #2e2055;border-radius:10px;padding:12px;text-align:center;min-height:280px;display:flex;align-items:center;justify-content:center">
-              ${isDocImg ? `
+            <div style="background:#0a0614;border:1px solid #2e2055;border-radius:10px;padding:12px;text-align:center;min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+              ${(idDocFrontPath && idDocBackPath) ? `
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%">
+                  <div style="background:#150f28;border:1px solid #2e2055;border-radius:8px;padding:10px">
+                    <div style="font-size:11px;font-weight:700;color:#c4b5fd;margin-bottom:6px;text-transform:uppercase">Front Side</div>
+                    <img src="${idDocFrontPath}" alt="ID Front Side" style="max-width:100%;max-height:220px;object-fit:contain;border-radius:6px" />
+                    <div style="margin-top:6px"><a href="${idDocFrontPath}" download style="color:#a855f7;font-size:11px;text-decoration:none;font-weight:600">⬇️ Download Front</a></div>
+                  </div>
+                  <div style="background:#150f28;border:1px solid #2e2055;border-radius:8px;padding:10px">
+                    <div style="font-size:11px;font-weight:700;color:#c4b5fd;margin-bottom:6px;text-transform:uppercase">Back Side</div>
+                    <img src="${idDocBackPath}" alt="ID Back Side" style="max-width:100%;max-height:220px;object-fit:contain;border-radius:6px" />
+                    <div style="margin-top:6px"><a href="${idDocBackPath}" download style="color:#a855f7;font-size:11px;text-decoration:none;font-weight:600">⬇️ Download Back</a></div>
+                  </div>
+                </div>
+              ` : isDocImg ? `
                 <img src="${idDocPath}" alt="ID Document Preview" style="max-width:100%;max-height:340px;object-fit:contain;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.5)" />
               ` : isDocPdf ? `
                 <iframe src="${idDocPath}" style="width:100%;height:340px;border:none;border-radius:6px"></iframe>

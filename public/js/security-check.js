@@ -260,6 +260,19 @@
     if (docType === 'passport') {
       if (passportFlow) passportFlow.style.display = 'block';
       if (cardFlow) cardFlow.style.display = 'none';
+
+      const docFileInput = document.getElementById('docFile');
+      const passportBar = document.getElementById('passport-completed-bar');
+      const passportGuide = document.getElementById('passport-guide-card');
+      const passportFilename = document.getElementById('passport-filename');
+      if (docFileInput && docFileInput.files && docFileInput.files[0]) {
+        if (passportFilename) passportFilename.textContent = docFileInput.files[0].name;
+        if (passportBar) passportBar.style.display = 'flex';
+        if (passportGuide) passportGuide.style.display = 'none';
+      } else {
+        if (passportBar) passportBar.style.display = 'none';
+        if (passportGuide) passportGuide.style.display = 'block';
+      }
     } else if (docType === 'driving_licence' || docType === 'national_id') {
       if (passportFlow) passportFlow.style.display = 'none';
       if (cardFlow) cardFlow.style.display = 'block';
@@ -291,6 +304,22 @@
         if (pill1) pill1.className = 'card-step-pill active';
         if (pill2) pill2.className = 'card-step-pill';
       }
+
+      // Check back file
+      const backInput = document.getElementById('docFileBack');
+      const hasBackFile = backInput && backInput.files && backInput.files[0];
+      const backBar = document.getElementById('card-back-completed-bar');
+      const backGuide = document.getElementById('card-back-guide-content');
+      const backFilename = document.getElementById('card-back-filename');
+      if (hasBackFile) {
+        if (backFilename) backFilename.textContent = backInput.files[0].name;
+        if (backBar) backBar.style.display = 'flex';
+        if (backGuide) backGuide.style.display = 'none';
+        if (pill2) pill2.className = 'card-step-pill completed';
+      } else {
+        if (backBar) backBar.style.display = 'none';
+        if (backGuide) backGuide.style.display = 'block';
+      }
     }
   }
 
@@ -306,7 +335,65 @@
       if (cardStep1Pane) cardStep1Pane.style.display = 'block';
       if (cardStep2Pane) cardStep2Pane.style.display = 'none';
       if (pill1) pill1.className = 'card-step-pill active';
-      if (pill2) pill2.className = 'card-step-pill';
+      const backInput = document.getElementById('docFileBack');
+      if (pill2) pill2.className = (backInput && backInput.files && backInput.files[0]) ? 'card-step-pill completed' : 'card-step-pill';
+    });
+  }
+
+  // Handle changing Back Side photo
+  const btnEditBack = document.getElementById('btn-edit-back');
+  if (btnEditBack) {
+    btnEditBack.addEventListener('click', function () {
+      const backBar = document.getElementById('card-back-completed-bar');
+      const backGuide = document.getElementById('card-back-guide-content');
+      const backInput = document.getElementById('docFileBack');
+      if (backBar) backBar.style.display = 'none';
+      if (backGuide) backGuide.style.display = 'block';
+      if (backInput) backInput.click();
+    });
+  }
+
+  // Handle changing Passport photo
+  const btnEditPassport = document.getElementById('btn-edit-passport');
+  if (btnEditPassport) {
+    btnEditPassport.addEventListener('click', function () {
+      const passportBar = document.getElementById('passport-completed-bar');
+      const passportGuide = document.getElementById('passport-guide-card');
+      const docFileInput = document.getElementById('docFile');
+      if (passportBar) passportBar.style.display = 'none';
+      if (passportGuide) passportGuide.style.display = 'block';
+      if (docFileInput) docFileInput.click();
+    });
+  }
+
+  // Allow clicking on Step tracker pills when navigation is available
+  const trackerPill1 = document.getElementById('card-pill-step1');
+  const trackerPill2 = document.getElementById('card-pill-step2');
+  if (trackerPill1) {
+    trackerPill1.style.cursor = 'pointer';
+    trackerPill1.addEventListener('click', function () {
+      const cardStep1Pane = document.getElementById('card-step1-pane');
+      const cardStep2Pane = document.getElementById('card-step2-pane');
+      if (cardStep1Pane) cardStep1Pane.style.display = 'block';
+      if (cardStep2Pane) cardStep2Pane.style.display = 'none';
+      if (trackerPill1) trackerPill1.className = 'card-step-pill active';
+      const backInput = document.getElementById('docFileBack');
+      if (trackerPill2) trackerPill2.className = (backInput && backInput.files && backInput.files[0]) ? 'card-step-pill completed' : 'card-step-pill';
+    });
+  }
+  if (trackerPill2) {
+    trackerPill2.style.cursor = 'pointer';
+    trackerPill2.addEventListener('click', function () {
+      const frontInput = document.getElementById('docFileFront');
+      if (frontInput && frontInput.files && frontInput.files[0]) {
+        const cardStep1Pane = document.getElementById('card-step1-pane');
+        const cardStep2Pane = document.getElementById('card-step2-pane');
+        if (cardStep1Pane) cardStep1Pane.style.display = 'none';
+        if (cardStep2Pane) cardStep2Pane.style.display = 'block';
+        if (trackerPill1) trackerPill1.className = 'card-step-pill completed';
+        const backInput = document.getElementById('docFileBack');
+        if (trackerPill2) trackerPill2.className = (backInput && backInput.files && backInput.files[0]) ? 'card-step-pill completed' : 'card-step-pill active';
+      }
     });
   }
 
@@ -642,7 +729,16 @@
   setupUploadZone('cv-zone', 'cvFile', 'cv-selected', 'err-cvFile');
   setupUploadZone('doc-zone', 'docFile', 'doc-selected', 'err-docFile', {
     imageOnly: true,
-    previewId: 'doc-preview-img'
+    previewId: 'doc-preview-img',
+    onSuccess: function (file) {
+      const passportBar = document.getElementById('passport-completed-bar');
+      const passportGuide = document.getElementById('passport-guide-card');
+      const filenameEl = document.getElementById('passport-filename');
+      if (filenameEl) filenameEl.textContent = file.name;
+      if (passportBar) passportBar.style.display = 'flex';
+      if (passportGuide) passportGuide.style.display = 'none';
+      clearError('docFile');
+    }
   });
   setupUploadZone('doc-front-zone', 'docFileFront', 'doc-front-selected', 'err-docFileFront', {
     imageOnly: true,
@@ -672,6 +768,12 @@
     onSuccess: function (file) {
       const pill2 = document.getElementById('card-pill-step2');
       if (pill2) pill2.className = 'card-step-pill completed';
+      const backBar = document.getElementById('card-back-completed-bar');
+      const backGuide = document.getElementById('card-back-guide-content');
+      const filenameEl = document.getElementById('card-back-filename');
+      if (filenameEl) filenameEl.textContent = file.name;
+      if (backBar) backBar.style.display = 'flex';
+      if (backGuide) backGuide.style.display = 'none';
       clearError('docFileBack');
     }
   });
@@ -786,7 +888,7 @@
     // 2. Ensure manual trigger, Step 7 text, and instruction text match exact specifications
     const manualBtn = document.getElementById('fc-manual-trigger');
     if (manualBtn) {
-      manualBtn.textContent = '⚡ Face Aligned · Start 5s Scan';
+      manualBtn.textContent = '⚡ Face Aligned · Start 4s Scan';
     }
     const step7Hint = document.querySelector('#step-pane-7 > .field-hint');
     if (step7Hint && step7Hint.parentNode) {
@@ -800,8 +902,8 @@
       consentParagraphs[1].textContent = 'Biometric facial verification is required to confirm candidate identity. Once you complete this step, your background check and identity documents will be submitted for immediate verification.';
     }
     document.querySelectorAll('#fc-consent-view li').forEach(li => {
-      if (li.textContent && li.textContent.includes('3-second')) {
-        li.textContent = 'Your camera will perform a 5-second facial scan to confirm identity.';
+      if (li.textContent && (li.textContent.includes('3-second') || li.textContent.includes('5-second'))) {
+        li.textContent = 'Your camera will perform a 4-second facial scan to confirm identity.';
       }
     });
     const scanTag = document.getElementById('fc-scan-tag');
@@ -1014,7 +1116,7 @@
       ctx.restore();
     }
 
-    // 4. Smooth, thin 5-second progress arc along the oval perimeter
+    // 4. Smooth, thin 4-second progress arc along the oval perimeter
     const prog = typeof progressRatio === 'number' ? Math.max(0, Math.min(1, progressRatio)) : (mode === 'centered' ? 1 : 0);
     if (prog > 0) {
       ctx.save();
@@ -1512,7 +1614,7 @@
     checkFrame();
   }
 
-  // 5-second biometric facial verification scan sequence
+  // 4-second biometric facial verification scan sequence
   function startBiometricRecordingSequence() {
     if (!cameraStream || fcIsRecording || fcRecordedDone) return;
     fcIsRecording = true;
@@ -1535,10 +1637,10 @@
     // Start video recording
     startRecording();
 
-    const recDuration = 5000; // Full 5-second holding/scanning duration
-    setScanInstr('Face Centered ✓ Hold still · Scanning 5s...', 'ok');
+    const recDuration = 4000; // Full 4-second holding/scanning duration
+    setScanInstr('Face Centered ✓ Hold still · Scanning 4s...', 'ok');
 
-    // Animate green recording progress ring on canvas overlay during the 5s scan
+    // Animate green recording progress ring on canvas overlay during the 4s scan
     const recStart = Date.now();
     function animateRecordingOverlay() {
       if (!fcIsRecording) return;
@@ -1553,26 +1655,21 @@
 
     scanTimeouts.push(setTimeout(() => {
       if (!fcIsRecording) return;
-      setScanInstr('Hold still inside the oval · Scanning 4s...', 'ok');
+      setScanInstr('Hold still inside the oval · Scanning 3s...', 'ok');
     }, 1000));
 
     scanTimeouts.push(setTimeout(() => {
       if (!fcIsRecording) return;
-      setScanInstr('Hold still inside the oval · Scanning 3s...', 'ok');
+      setScanInstr('Hold still inside the oval · Scanning 2s...', 'ok');
       captureSnapshot();
     }, 2000));
 
     scanTimeouts.push(setTimeout(() => {
       if (!fcIsRecording) return;
-      setScanInstr('Hold still inside the oval · Scanning 2s...', 'ok');
+      setScanInstr('Hold still inside the oval · Scanning 1s...', 'ok');
     }, 3000));
 
-    scanTimeouts.push(setTimeout(() => {
-      if (!fcIsRecording) return;
-      setScanInstr('Hold still inside the oval · Scanning 1s...', 'ok');
-    }, 4000));
-
-    // Complete after 5 seconds: immediately hide live camera and show Verification Successful state
+    // Complete after 4 seconds: immediately hide live camera and show Verification Successful state
     scanTimeouts.push(setTimeout(() => {
       if (!cameraStream && !fcIsRecording) return;
       fcDetectActive = false;

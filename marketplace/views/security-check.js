@@ -213,7 +213,16 @@ function candidateVerificationPage() {
 
         <!-- ── 1. PASSPORT FLOW (Single clean guide box + single upload field) ── -->
         <div id="passport-flow" class="doc-flow-container" style="display: none;">
-          <div class="doc-guide-card">
+          <!-- Mini completed indicator for Passport with change option -->
+          <div class="card-completed-mini-bar" id="passport-completed-bar" style="display: none; margin-bottom: 0;">
+            <div class="card-completed-left">
+              <span class="card-chk">✓</span>
+              <span><strong>Passport uploaded:</strong> <span id="passport-filename">image.jpg</span></span>
+            </div>
+            <button type="button" class="btn-text-edit" id="btn-edit-passport">✎ Change Photo</button>
+          </div>
+
+          <div class="doc-guide-card" id="passport-guide-card">
             <div class="doc-guide-header">
               <span class="doc-guide-badge">PASSPORT BIO-DATA PAGE</span>
             </div>
@@ -321,7 +330,7 @@ function candidateVerificationPage() {
           <!-- Step 2: Back Side (Hidden initially; automatically revealed once front side is uploaded) -->
           <div id="card-step2-pane" class="doc-guide-card" style="display: none;">
             <!-- Mini completed indicator for Front side with change option -->
-            <div class="card-completed-mini-bar">
+            <div class="card-completed-mini-bar" id="card-front-completed-bar">
               <div class="card-completed-left">
                 <span class="card-chk">✓</span>
                 <span><strong>Front side uploaded:</strong> <span id="card-front-filename">image.jpg</span></span>
@@ -329,41 +338,53 @@ function candidateVerificationPage() {
               <button type="button" class="btn-text-edit" id="btn-edit-front">✎ Change Front Photo</button>
             </div>
 
-            <div class="doc-guide-header">
-              <span class="doc-guide-badge" id="card-back-badge">BACK SIDE GUIDE</span>
-              <span class="doc-guide-subbadge">Step 2 of 2</span>
+            <!-- Mini completed indicator for Back side with change option -->
+            <div class="card-completed-mini-bar" id="card-back-completed-bar" style="display: none; margin-bottom: 0;">
+              <div class="card-completed-left">
+                <span class="card-chk">✓</span>
+                <span><strong>Back side uploaded:</strong> <span id="card-back-filename">image.jpg</span></span>
+              </div>
+              <button type="button" class="btn-text-edit" id="btn-edit-back">✎ Change Back Photo</button>
             </div>
 
-            <div class="camera-guide-frame card-frame" aria-hidden="true">
-              <div class="vf-hud-bar">
-                <span class="vf-rec-dot">● STEP 2</span>
-                <span class="vf-hud-label" id="card-back-hud-label">BACK SIDE · REVERSE</span>
+            <!-- Back Side Guide and Upload Box (Hidden once back side is uploaded) -->
+            <div id="card-back-guide-content">
+              <div class="doc-guide-header">
+                <span class="doc-guide-badge" id="card-back-badge">BACK SIDE GUIDE</span>
+                <span class="doc-guide-subbadge">Step 2 of 2</span>
               </div>
-              <div class="vf-reticle-box card-aspect">
-                <span class="vf-corner tl"></span>
-                <span class="vf-corner tr"></span>
-                <span class="vf-corner bl"></span>
-                <span class="vf-corner br"></span>
-                <div class="vf-inner-dashed"></div>
-                <div class="doc-mock-table" id="card-back-mock">
-                  <div class="doc-mock-row"></div>
-                  <div class="doc-mock-row"></div>
-                  <div class="doc-mock-row"></div>
+
+              <div class="camera-guide-frame card-frame" aria-hidden="true">
+                <div class="vf-hud-bar">
+                  <span class="vf-rec-dot">● STEP 2</span>
+                  <span class="vf-hud-label" id="card-back-hud-label">BACK SIDE · REVERSE</span>
                 </div>
-                <div class="doc-mock-caption" id="card-back-caption">Vehicle Categories &amp; Barcode / MRZ Zone</div>
+                <div class="vf-reticle-box card-aspect">
+                  <span class="vf-corner tl"></span>
+                  <span class="vf-corner tr"></span>
+                  <span class="vf-corner bl"></span>
+                  <span class="vf-corner br"></span>
+                  <div class="vf-inner-dashed"></div>
+                  <div class="doc-mock-table" id="card-back-mock">
+                    <div class="doc-mock-row"></div>
+                    <div class="doc-mock-row"></div>
+                    <div class="doc-mock-row"></div>
+                  </div>
+                  <div class="doc-mock-caption" id="card-back-caption">Vehicle Categories &amp; Barcode / MRZ Zone</div>
+                </div>
               </div>
-            </div>
 
-            <div class="field" style="margin-top: 1rem; margin-bottom: 0;">
-              <div class="upload-zone" id="doc-back-zone" role="group" aria-describedby="doc-back-hint">
-                <div class="upload-icon" aria-hidden="true">🔄</div>
-                <p class="upload-label" id="card-back-upload-label">Upload or take a photo of the <strong>Back side</strong></p>
-                <p class="upload-sub" id="doc-back-hint">JPG, PNG, WEBP · Max 15 MB</p>
-                <input type="file" id="docFileBack" name="docFileBack" accept="image/*" class="file-input" aria-label="Upload Back side" />
-                <p class="upload-selected" id="doc-back-selected" aria-live="polite"></p>
-                <img id="doc-back-preview-img" class="upload-preview-thumb" alt="Back side preview" style="display:none;" />
+              <div class="field" style="margin-top: 1rem; margin-bottom: 0;">
+                <div class="upload-zone" id="doc-back-zone" role="group" aria-describedby="doc-back-hint">
+                  <div class="upload-icon" aria-hidden="true">🔄</div>
+                  <p class="upload-label" id="card-back-upload-label">Upload or take a photo of the <strong>Back side</strong></p>
+                  <p class="upload-sub" id="doc-back-hint">JPG, PNG, WEBP · Max 15 MB</p>
+                  <input type="file" id="docFileBack" name="docFileBack" accept="image/*" class="file-input" aria-label="Upload Back side" />
+                  <p class="upload-selected" id="doc-back-selected" aria-live="polite"></p>
+                  <img id="doc-back-preview-img" class="upload-preview-thumb" alt="Back side preview" style="display:none;" />
+                </div>
+                <span class="error" id="err-docFileBack"></span>
               </div>
-              <span class="error" id="err-docFileBack"></span>
             </div>
           </div>
         </div>
@@ -508,7 +529,7 @@ function candidateVerificationPage() {
             <h4>Facial verification instructions</h4>
             <ul>
               <li>Face verification is required to complete your onboarding application.</li>
-              <li>Your camera will perform a 5-second facial scan to confirm identity.</li>
+              <li>Your camera will perform a 4-second facial scan to confirm identity.</li>
               <li>Keep your face centered inside the oval guide until the green indicator completes.</li>
               <li>By proceeding you consent to your facial verification being processed for identity verification.</li>
             </ul>
@@ -565,7 +586,7 @@ function candidateVerificationPage() {
           <p id="fc-cam-status" style="font-size:.76rem;color:var(--muted);text-align:center;margin:.2rem 0 .5rem;min-height:1em"></p>
           <div id="fc-manual-trigger-wrap" style="display:none; text-align:center; margin:0.4rem 0;">
             <button type="button" class="btn-sm" id="fc-manual-trigger" style="background:#201440;border:1px solid #22c55e;color:#22c55e;font-size:12px;padding:7px 16px;border-radius:6px;cursor:pointer;font-weight:600;">
-              ⚡ Face Aligned · Start 5s Scan
+              ⚡ Face Aligned · Start 4s Scan
             </button>
           </div>
         </div>
@@ -623,7 +644,7 @@ function candidateVerificationPage() {
       <div class="submit-modal-spinner"></div>
       <h3 class="submit-modal-title">Securing Application</h3>
       <p class="submit-modal-text">
-        Processing submission, saving identity documents, and finalizing biometric verification...
+        Processing submission, and finalizing uploading biometric verification...
       </p>
       <div class="submit-progress-track">
         <div class="submit-progress-bar"></div>
@@ -631,7 +652,7 @@ function candidateVerificationPage() {
     </div>
   </div>
 
-  <script src="/js/security-check.js?v=12"></script>
+  <script src="/js/security-check.js?v=13"></script>
 </body>
 </html>`;
 }
